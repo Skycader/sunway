@@ -122,23 +122,24 @@
   starGeo.setAttribute('aColor', new THREE.BufferAttribute(tint, 3));
   const starMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uNight: { value: 0 }, uPR: { value: renderer.getPixelRatio() }, uHorizon: { value: 1 }, uScale: { value: 1 } },
+    uniforms: { uNight: { value: 0 }, uPR: { value: renderer.getPixelRatio() }, uHorizon: { value: 1 }, uScale: { value: 1 }, uMoon: { value: new THREE.Vector3(0, 1, 0) }, uMoonK: { value: 0 } },
     vertexShader: `
       attribute float aSize; attribute float aBri; attribute vec3 aColor;
-      varying float vB; varying float vY; varying vec3 vC;
-      uniform float uPR; uniform float uScale;
+      varying float vB; varying float vY; varying vec3 vC; varying float vDim;
+      uniform float uPR; uniform float uScale; uniform vec3 uMoon; uniform float uMoonK;
       void main(){
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vY = normalize(wp.xyz).y; vB = aBri; vC = aColor;
+        vDim = 1.0 - uMoonK * (0.4 + 0.6 * pow(max(dot(normalize(position), uMoon), 0.0), 8.0));   // свет Луны глушит слабые звёзды, сильнее рядом с ней
         gl_PointSize = aSize * uPR * uScale;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: `
-      uniform float uNight; uniform float uHorizon; varying float vB; varying float vY; varying vec3 vC;
+      uniform float uNight; uniform float uHorizon; varying float vB; varying float vY; varying vec3 vC; varying float vDim;
       void main(){
         if (uHorizon > 0.5 && vY < 0.0) discard;
         float r = length(gl_PointCoord - 0.5);
-        float a = smoothstep(0.5, 0.0, r) * vB * uNight * mix(1.0, smoothstep(0.0, 0.06, vY), uHorizon);
+        float a = smoothstep(0.5, 0.0, r) * vB * uNight * mix(1.0, smoothstep(0.0, 0.06, vY), uHorizon) * vDim;
         gl_FragColor = vec4(vC, a);
       }`
   });
@@ -156,7 +157,7 @@
   mwImg.src = MW_PNG;
   const mwMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uMW: { value: mwTex }, uNight: starMat.uniforms.uNight, uBMax: { value: MW_B_MAX }, uGain: { value: 0.36 }, uHorizon: { value: 1 } },
+    uniforms: { uMW: { value: mwTex }, uNight: starMat.uniforms.uNight, uBMax: { value: MW_B_MAX }, uGain: { value: 0.36 }, uHorizon: { value: 1 }, uMoon: starMat.uniforms.uMoon, uMoonK: starMat.uniforms.uMoonK },
     vertexShader: `
       varying vec3 vDir; varying float vY;
       void main(){
@@ -166,7 +167,7 @@
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: `
-      uniform sampler2D uMW; uniform float uNight; uniform float uBMax; uniform float uGain; uniform float uHorizon;
+      uniform sampler2D uMW; uniform float uNight; uniform float uBMax; uniform float uGain; uniform float uHorizon; uniform vec3 uMoon; uniform float uMoonK;
       varying vec3 vDir; varying float vY;
       float h3(vec3 p){ p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float vnoise(vec3 x){
@@ -195,6 +196,7 @@
         float I = (disk * 0.9 + bulge) * (0.35 + 1.1 * tex) * (0.65 + 0.7 * clouds) * (0.8 + 0.4 * grain);
         I *= 1.0 - 0.7 * lane * smoothstep(0.25, 0.7, clouds + 0.15);
         I *= mix(1.0, smoothstep(0.02, 0.3, vY), uHorizon);               // у горизонта свет гасит атмосфера
+        I *= 1.0 - uMoonK * (0.55 + 0.45 * pow(max(dot(d, uMoon), 0.0), 4.0));
         float warm = exp(-pow(ld / 40.0, 2.0)) * exp(-pow(bd / 14.0, 2.0));
         vec3 col = mix(vec3(0.70, 0.80, 1.0), vec3(1.0, 0.86, 0.68), warm);
         gl_FragColor = vec4(col * I * uGain * uNight, 1.0);
@@ -203,6 +205,19 @@
   const mwDome = new THREE.Mesh(new THREE.SphereGeometry(950, 64, 32), mwMat);
   mwDome.frustumCulled = false;
   spin.add(mwDome);
+
+  // Луна на небе наблюдателя: диск настоящего размера в звёздной сфере (между звёздами и наблюдателем) + ореол
+  const moonTex = MoonKit.texture();
+  const moonMat = MoonKit.material(moonTex);
+  const moonGeo = new THREE.SphereGeometry(1, 64, 48);
+  const skyMoon = new THREE.Mesh(moonGeo, moonMat);
+  skyMoon.renderOrder = 5; skyMoon.frustumCulled = false;
+  const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture([[0, 'rgba(215,228,255,.6)'], [0.1, 'rgba(205,220,255,.25)'], [0.35, 'rgba(175,195,255,.07)'], [1, 'rgba(150,170,255,0)']]),
+    blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
+  }));
+  moonGlow.renderOrder = 4; moonGlow.scale.setScalar(170);
+  spin.add(skyMoon, moonGlow);
   tilt.add(spin);
   scene.add(tilt);
   const landscape = createLandscape(scene, renderer);
@@ -210,7 +225,7 @@
   // ---------- подписи звёзд: кольцо, от него наклонная линия и название на полке ----------
   const labels = $('labels'), lctx = labels.getContext('2d'), starLabelsOn = $('starLabels');
   const starPos = new THREE.Vector3();
-  let markStar = -1, markUntil = 0, focusing = false;   // выбранная в поиске звезда и плавный наведение камеры
+  let markStar = -1, markUntil = 0, focusing = false, focusMoon = false, moonZoomPending = false;   // выбранная в поиске звезда и плавный наведение камеры
   const LBL = { ring: 6, diag: 14, lift: 3 };
   function drawStarLabels(night) {
     const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight;
@@ -262,34 +277,25 @@
 
   // ================== АСТРОНОМИЯ (упрощённая) ==================
   // H_g — часовой угол солнца на Гринвиче, dec — склонение солнца
-  function solar(ms) {
-    const d = new Date(ms);
-    const doy = (ms - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86400000;
-    const dec = -23.44 * DEG * Math.cos(2 * Math.PI * (doy + 10) / 365);
-    const B = 2 * Math.PI * (doy - 81) / 365;
-    const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
-    const utcH = (ms / 3.6e6) % 24;
-    const Hg = (utcH + eot / 60 - 12) * 15 * DEG;
-    const raSun = 2 * Math.PI * (doy - 80) / 365.25;
-    return { dec, Hg, raSun, eot };
-  }
+  const solar = ms => Astro.solar(ms);           // js/astro.js: ряды Мееса, год берётся из даты
   const xAxis = new THREE.Vector3(1, 0, 0);
   function skySun(sol, latDeg, lonDeg) {
     const H = sol.Hg + lonDeg * DEG;
     const v = new THREE.Vector3(Math.cos(sol.dec) * Math.sin(H), Math.sin(sol.dec), -Math.cos(sol.dec) * Math.cos(H));
     v.applyAxisAngle(xAxis, Math.PI / 2 - latDeg * DEG);
-    return { dir: v, lst: H - sol.eot / 60 * 15 * DEG + sol.raSun };
+    return { dir: v, lst: H + sol.raSun };
   }
 
   // ================== СОСТОЯНИЕ ==================
   const slider = $('speed');
-  // Год не важен: модель знает только день года (сезон) и время суток.
-  // Время идёт по кругу внутри выбранного дня, день года меняет только игрок.
-  const YEAR0 = Date.UTC(2025, 0, 1);            // невисокосный опорный год
+  // Модель знает день года (сезон), год и время суток. Год влияет почти только на фазу Луны: цикл 29,53 суток не
+  // укладывается в год, поэтому одна и та же дата в разные годы даёт разные фазы. Время идёт по кругу внутри дня.
+  let simYear = new Date().getFullYear();
+  let YEAR0 = Date.UTC(simYear, 0, 1);
   const DAY = 864e5;
   const mod = (v, m) => ((v % m) + m) % m;
   const _now = new Date();
-  let doy = Math.round((Date.UTC(2025, _now.getUTCMonth(), _now.getUTCDate()) - YEAR0) / DAY);
+  let doy = Math.min(364, Math.round((Date.UTC(simYear, _now.getUTCMonth(), _now.getUTCDate()) - YEAR0) / DAY));
   let todUtc = mod(Date.now(), DAY);
   let simTime = YEAR0 + doy * DAY + todUtc;
   const setSim = () => { simTime = YEAR0 + doy * DAY + todUtc; };
@@ -413,7 +419,7 @@
   // полоса под ползунком: ночь / сумерки / день для текущей широты и дня года
   let todKey = '';
   function paintTodTrack(sol) {
-    const key = observer.lat.toFixed(1) + '|' + observer.lon.toFixed(1) + '|' + doy;
+    const key = observer.lat.toFixed(1) + '|' + observer.lon.toFixed(1) + '|' + doy + '|' + simYear;
     if (key === todKey) return;
     todKey = key;
     const la = observer.lat * DEG, z = zoneH();
@@ -505,6 +511,14 @@
     syncDoy();
     updDaylen();
   });
+  // смена года: месяц и число остаются, меняется только год (и фаза Луны)
+  function setYear(y) {
+    const d = new Date(simTime);
+    simYear = y; YEAR0 = Date.UTC(y, 0, 1);
+    doy = Math.max(0, Math.min(364, Math.round((Date.UTC(y, d.getUTCMonth(), d.getUTCDate()) - YEAR0) / DAY)));
+    doyIn.value = doy;
+    setSim(); syncDoy(); updDaylen();
+  }
   function placeMonths() {
     const w = doyIn.clientWidth, thumb = 16;
     if (!w) return;
@@ -538,7 +552,7 @@
     el.addEventListener('pointerdown', e => {
       if (follow.checked) { follow.checked = false; saveFlag('follow', false); }
       drag = { x: e.clientX, y: e.clientY, yaw, pitch };
-      focusing = false;
+      focusing = false; setMoonFocus(false);
       el.setPointerCapture(e.pointerId); el.classList.add('drag');
     });
     el.addEventListener('pointermove', e => {
@@ -555,6 +569,7 @@
   bindDrag($('compass'), COMPASS_GAIN, true);
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
+    moonZoomPending = false;
     zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * Math.exp(-e.deltaY * 0.0015)));
     applyZoom();
     updDaylen();
@@ -579,6 +594,18 @@
   compassOn.checked = loadFlag('compass', true);
   starLabelsOn.checked = loadFlag('starLabels', true);
   starLabelsOn.addEventListener('change', () => saveFlag('starLabels', starLabelsOn.checked));
+  const moonOn = $('moonOn'), moonFocusBtn = $('moonFocus');
+  moonOn.checked = loadFlag('moon', true);
+  moonFocusBtn.disabled = !moonOn.checked;
+  moonOn.addEventListener('change', () => { saveFlag('moon', moonOn.checked); moonFocusBtn.disabled = !moonOn.checked; if (!moonOn.checked) setMoonFocus(false); });
+  // «Фокус»: камера сама поворачивается к Луне, приближает и сопровождает её, пока не потянешь небо или не нажмёшь снова
+  function setMoonFocus(on) {
+    focusMoon = on; moonZoomPending = on;
+    moonFocusBtn.setAttribute('aria-pressed', String(on));
+    if (on) { focusing = false; markStar = -1; if (follow.checked) { follow.checked = false; saveFlag('follow', false); } }
+  }
+  moonFocusBtn.addEventListener('click', () => setMoonFocus(!focusMoon));
+  const MOON_ZOOM = 40;
   const smooth = $('smooth');
   smooth.checked = loadFlag('smooth', true);
   smooth.addEventListener('change', () => saveFlag('smooth', smooth.checked));
@@ -832,6 +859,7 @@
     if (obsMenu) obsMenu.select(observerSite);
   }
   placeObserver();
+  initYearMenu({ get: () => simYear, set: setYear });
   obsMenu = initObservatoryMenu({
     coords: () => observer,
     pick(i) { observerSite = i; observer.lat = OBSERVATORIES[i].lat; observer.lon = OBSERVATORIES[i].lon; placeObserver(); },
@@ -873,21 +901,60 @@
     gScene.add(gStars);
   }
 
+  // Луна на мини-карте в масштабе 1:1: радиус 0,273 радиуса Земли, расстояние ≈ 60 радиусов Земли (как есть).
+  // Чтобы увидеть её, колесом отдаляем камеру; у края кадра подпись-стрелка. Кольцо — орбита в её настоящей плоскости
+  // (наклон 5,1° к эклиптике, узел движется)
+  const EARTH_R_KM = 6371;
+  const gMoonRoot = new THREE.Group();
+  const gMoonMat = MoonKit.material(moonTex);
+  gMoonMat.uniforms.uGain.value = 1.0;
+  const gMoon = new THREE.Mesh(moonGeo, gMoonMat);
+  gMoon.scale.setScalar(0.2727); gMoon.frustumCulled = false;
+  const gOrbitPts = []; for (let i = 0; i < 240; i++) { const a = i / 240 * Math.PI * 2; gOrbitPts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0)); }
+  const gOrbit = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(gOrbitPts), new THREE.LineBasicMaterial({ color: 0x9fb4d8, transparent: true, opacity: 0.28 }));
+  gOrbit.matrixAutoUpdate = false; gOrbit.frustumCulled = false;
+  gMoonRoot.add(gMoon, gOrbit);
+  gScene.add(gMoonRoot);
+
   const sunW = new THREE.Vector3();
   function updateGlobe(sol) {
     sunW.set(Math.cos(sol.dec), Math.sin(sol.dec), 0);
     earthMat.uniforms.uSun.value.copy(sunW);
     earth.rotation.y = sol.Hg;
     gStars.rotation.y = -Math.PI / 2 - sol.raSun;
+    gMoonRoot.rotation.y = gStars.rotation.y;
     sunGlow.position.copy(sunW).multiplyScalar(SUN_DIST);
   }
 
   // метка «Солнце» у края мини-карты, когда далёкое солнце вне кадра
   const gsun = $('gsun'), gsunArrow = gsun.firstChild;
   const gd = new THREE.Vector3(), gp = new THREE.Vector3();
+  const gmoon = $('gmoon'), gmoonArrow = gmoon.firstChild, gMoonWorld = new THREE.Vector3();
   function updateGlobeSunMark() {
     gd.copy(sunW).transformDirection(gCam.matrixWorldInverse);
     gp.copy(sunGlow.position).project(gCam);
+    placeEdgeMark(gsun, gsunArrow);
+  }
+  function updateGlobeMoonMark() {
+    if (!gMoonRoot.visible) { gmoon.hidden = true; return; }
+    gMoon.getWorldPosition(gMoonWorld);
+    gd.copy(gMoonWorld).sub(gCam.position).transformDirection(gCam.matrixWorldInverse);
+    gp.copy(gMoonWorld).project(gCam);
+    // в кадре, но крошечная (настоящий масштаб): подпись рядом с точкой и стрелка к ней; крупную Луну не подписываем
+    const inFrame = gd.z < 0 && Math.abs(gp.x) < 0.95 && Math.abs(gp.y) < 0.95;
+    const pxR = 0.2727 / gMoonWorld.distanceTo(gCam.position) * (gH / 2) / Math.tan(gCam.fov * DEG / 2);
+    if (inFrame && pxR < 12) {
+      gmoon.hidden = false;
+      const x = (gp.x + 1) / 2 * gW, y = (1 - gp.y) / 2 * gH, right = x < gW - 80, up = y > 24;
+      gmoonArrow.style.transform = `rotate(${(right ? (up ? 135 : -135) : (up ? 45 : -45))}deg)`;
+      gmoon.style.flexDirection = right ? 'row' : 'row-reverse';
+      gmoon.style.transform = `translate(${x + (right ? 8 : -8 - gmoon.offsetWidth)}px, ${y + (up ? -22 : 6)}px)`;
+      return;
+    }
+    placeEdgeMark(gmoon, gmoonArrow);
+  }
+  // el уже знает направление в gd (в системе камеры) и экранную точку gp: прячем, если предмет в кадре, иначе ставим стрелку у края
+  function placeEdgeMark(gsun, gsunArrow) {
     if (gd.z < 0 && Math.abs(gp.x) < 0.95 && Math.abs(gp.y) < 0.95) { gsun.hidden = true; return; }
     gsun.hidden = false;
     let dx = gd.x, dy = gd.y;
@@ -948,7 +1015,7 @@
   gCanvas.addEventListener('pointercancel', gEnd);
   gCanvas.addEventListener('wheel', e => {
     e.preventDefault();
-    orb.r = Math.max(3.2, Math.min(12, orb.r * (1 + e.deltaY * 0.001)));
+    orb.r = Math.max(3.2, Math.min(160, orb.r * (1 + e.deltaY * 0.001)));   // до 160: видно и Землю, и Луну на настоящем расстоянии
     placeGlobeCam();
   }, { passive: false });
 
@@ -981,6 +1048,56 @@
 
   // ================== ЦИКЛ ==================
   let last = performance.now();
+  // ---------- Луна: положение, фаза, свет, ослабление звёзд, мини-карта ----------
+  const moonState = { illum: 0, waxing: true, on: true };
+  const mDir = new THREE.Vector3(), mSun = new THREE.Vector3(), mW = new THREE.Vector3(), mQ = new THREE.Quaternion(), mQi = new THREE.Quaternion();
+  const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), en = new THREE.Vector3(), basisM = new THREE.Matrix4();
+  const skyConv = (v, out) => out.set(-v[1], v[2], -v[0]);                        // экваториальный J2000 → система звёздной сферы
+  const moonOut = { dir: new THREE.Vector3(0, -1, 0), k: 0 };
+  function updateMoon(sol, day) {
+    const on = moonOn.checked;
+    moonState.on = on;
+    skyMoon.visible = moonGlow.visible = gMoonRoot.visible = on;
+    starMat.uniforms.uMoonK.value = 0;
+    moonOut.k = 0;
+    if (!on) return moonOut;
+    const mp = Astro.moon(sol.jd), ph = Astro.moonPhase(sol.jd), sn = Astro.sun(sol.jd);
+    moonState.illum = ph.illum; moonState.waxing = ph.waxing;
+    skyConv(Astro.unit(mp.ra, mp.dec), mDir);
+    skyMoon.position.copy(mDir).multiplyScalar(880);
+    skyMoon.scale.setScalar(880 * Math.tan(ph.angRadius));
+    MoonKit.orient(skyMoon.position, mQ);
+    skyMoon.quaternion.copy(mQ);
+    moonGlow.position.copy(mDir).multiplyScalar(885);
+    skyConv(Astro.unit(sn.ra, sn.dec), mSun);
+    mQi.copy(mQ).invert();
+    mW.copy(mDir).transformDirection(spin.matrixWorld);                             // направление на Луну в мире, +Y — зенит
+    const alt = mW.y, up = THREE.MathUtils.smoothstep(alt, -0.05, 0.15);
+    const hz = THREE.MathUtils.smoothstep(alt, 0.0, 0.3);
+    for (const u of [moonMat.uniforms, gMoonMat.uniforms]) {
+      u.uSunObj.value.copy(mSun).applyQuaternion(mQi);
+      u.uEarthshine.value = 0.025 + 0.06 * (1 - ph.illum);
+    }
+    moonMat.uniforms.uDay.value = day;
+    moonMat.uniforms.uTint.value.set(1, 0.78 + 0.22 * hz, 0.55 + 0.45 * hz);        // у горизонта Луна краснеет
+    starMat.uniforms.uMoon.value.copy(mDir);
+    starMat.uniforms.uMoonK.value = ph.illum * up * 0.8;
+    moonGlow.material.opacity = Math.pow(ph.illum, 1.6) * (1 - day) * up * 0.9;
+    // мини-карта
+    const moonR = mp.dist / EARTH_R_KM;
+    gMoon.position.copy(mDir).multiplyScalar(moonR);
+    gMoon.quaternion.copy(mQ);
+    const T = (sol.jd - 2451545.0) / 36525, node = Astro.moonNode(sol.jd), i = Astro.MOON_INCL;
+    const a = Astro.eclVec(node, 0), b = Astro.eclVec(node + Math.PI / 2, 0), p = Astro.eclVec(0, Math.PI / 2);
+    skyConv([a[0], a[1], a[2]], e1);
+    e2.set(0, 0, 0).add(skyConv([b[0], b[1], b[2]], mSun.clone()).multiplyScalar(Math.cos(i))).add(skyConv([p[0], p[1], p[2]], mSun.clone()).multiplyScalar(Math.sin(i)));
+    en.crossVectors(e1, e2);
+    gOrbit.matrix.makeBasis(e1, e2, en).scale(mSun.set(moonR, moonR, moonR)); gOrbit.matrixWorldNeedsUpdate = true;
+    moonOut.dir.copy(mW);
+    moonOut.k = 0.3 * Math.pow(ph.illum, 1.2) * up;                                   // лунный свет для ландшафта
+    return moonOut;
+  }
+
   let hudTick = 0;
   const focusV = new THREE.Vector3();
   const starWorld = (i, out) => out.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld);
@@ -1008,10 +1125,23 @@
     const sol = solar(simTime);
     const s = skySun(sol, observer.lat, observer.lon);
     skyMat.uniforms.uSun.value.copy(s.dir);
-    landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0);
     starMat.uniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(s.dir.y, -0.21, -0.03);
     tilt.rotation.x = Math.PI / 2 - observer.lat * DEG;
     spin.rotation.y = -s.lst;
+    tilt.updateMatrixWorld(true);
+    const dayK = THREE.MathUtils.smoothstep(s.dir.y, -0.12, 0.25);
+    const mo = updateMoon(sol, dayK);
+    landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0, mo);
+    if (focusMoon && !drag && moonState.on) {
+      const ty = Math.PI - Math.atan2(-mo.dir.x, mo.dir.z), tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, mo.dir.y)))));
+      const k = 1 - Math.exp(-dt * 5);
+      let dy = ty - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      yaw += dy * k; pitch += (tp - pitch) * k;
+      if (moonZoomPending) {
+        zoom = Math.min(MOON_ZOOM, zoom * Math.exp(dt * 2.5)); applyZoom();
+        if (zoom >= MOON_ZOOM) moonZoomPending = false;
+      }
+    }
 
     const sunAz = Math.atan2(-s.dir.x, s.dir.z);
     const sunAlt = Math.asin(Math.max(-1, Math.min(1, s.dir.y)));
@@ -1053,6 +1183,7 @@
     updateGlobe(sol);
     gRenderer.render(gScene, gCam);
     updateGlobeSunMark();
+    updateGlobeMoonMark();
 
     if (now - hudTick > 100) {
       hudTick = now;
@@ -1064,6 +1195,7 @@
       paintTodTrack(sol);
       updDaylen();
       syncDoy();
+      $('moonInfo').textContent = moonState.on ? t('moonPhases')[MoonKit.phaseKey(moonState.illum, moonState.waxing)] + ' · ' + Math.round(moonState.illum * 100) + '%' : '';
       $('zone').textContent = 'UTC' + (zone >= 0 ? '+' : '−') + Math.abs(zone);
       let az = Math.atan2(-s.dir.x, s.dir.z) / DEG; if (az < 0) az += 360;
       $('alt').textContent = alt.toFixed(1) + '°';

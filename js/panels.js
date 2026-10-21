@@ -165,3 +165,35 @@ function initStarSearch(ctx) {
   I18N.onChange(build);
   build();
 }
+
+// ---------- выбор года ----------
+function initYearMenu(ctx) {
+  const btn = document.getElementById('yearBtn'), menu = document.getElementById('yearMenu'), text = document.getElementById('yearText');
+  const FROM = 1900, TO = 2100;
+  for (let y = FROM; y <= TO; y++) {
+    const li = document.createElement('li'); li.setAttribute('role', 'option'); li.dataset.year = y; li.textContent = y; menu.appendChild(li);
+  }
+  const mark = () => {
+    text.textContent = ctx.get();
+    menu.querySelectorAll('li').forEach(li => li.setAttribute('aria-selected', String(+li.dataset.year === ctx.get())));
+  };
+  const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  function place() {
+    const r = btn.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - 108, r.left)) + 'px';
+    const room = innerHeight - r.bottom - 12, above = r.top - 12;
+    if (room >= 220 || room >= above) { menu.style.top = r.bottom + 6 + 'px'; menu.style.bottom = 'auto'; menu.style.maxHeight = Math.min(300, Math.max(140, room)) + 'px'; }
+    else { menu.style.bottom = innerHeight - r.top + 6 + 'px'; menu.style.top = 'auto'; menu.style.maxHeight = Math.min(300, Math.max(140, above)) + 'px'; }
+  }
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!menu.hidden) { close(); return; }
+    menu.hidden = false; place(); btn.setAttribute('aria-expanded', 'true');
+    const cur = menu.querySelector('[aria-selected="true"]'); if (cur) menu.scrollTop = cur.offsetTop - menu.clientHeight / 2 + cur.offsetHeight / 2;
+  });
+  menu.addEventListener('click', e => { const li = e.target.closest('li'); if (!li) return; ctx.set(+li.dataset.year); mark(); close(); });
+  document.addEventListener('click', e => { if (!menu.contains(e.target) && !btn.contains(e.target)) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  addEventListener('resize', () => { if (!menu.hidden) place(); });
+  mark();
+}

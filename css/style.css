@@ -325,3 +325,30 @@ button.obs-btn, button.obs-btn * { cursor: pointer; user-select: none; -webkit-u
 .obs-ctx li { flex-direction: row; align-items: center; gap: 10px; font: 600 13px var(--f-ui); color: var(--ink); user-select: none; }
 .ctx-ico { width: 16px; text-align: center; color: var(--sun); font-size: 14px; }
 button.obs-btn #obsCoord { cursor: pointer; user-select: none; -webkit-user-select: none; }   /* общее правило для #obsCoord, #clock… даёт курсор-текст */
+
+/* ---------- Луна: строка с фазой и выбор года ---------- */
+.moon-info { font: 600 12px var(--f-ui); color: var(--ink-dim); letter-spacing: .02em; white-space: nowrap; }
+.season-right { display: inline-flex; align-items: baseline; gap: 10px; }
+.year-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; font: 500 12px var(--f-num); font-variant-numeric: tabular-nums;
+  color: var(--ink); background: rgba(200,220,255,.08); border: 1px solid var(--glass-line); border-radius: 8px; cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.year-btn:hover { background: rgba(200,220,255,.16); border-color: rgba(200,220,255,.4); }
+.year-caret { color: var(--ink-dim); font-size: 10px; }
+.year-btn[aria-expanded="true"] .year-caret { transform: rotate(180deg); }
+.year-menu { width: 104px; padding: 4px; }
+.year-menu li { flex-direction: row; justify-content: center; padding: 5px 8px; font: 500 13px var(--f-num); color: var(--ink); }
+.year-menu li[aria-selected="true"] { color: var(--sun); background: rgba(255,196,107,.12); }
+.year-btn, .year-btn * { user-select: none; }
+
+/* кнопка «Фокус» у Луны и метка Луны у края мини-карты */
+.check-row { flex-wrap: wrap; row-gap: 4px; }
+.icon-btn.pill { width: auto; height: 24px; padding: 0 10px 0 8px; gap: 6px; display: inline-flex; font: 600 11.5px var(--f-ui); letter-spacing: .02em; }
+.ico-sm { width: 13px; height: 13px; stroke-width: 1.6; }
+.ico-dot { fill: var(--sun); stroke: none; }
+.icon-btn:disabled { opacity: .4; cursor: default; pointer-events: none; }
+.icon-btn[aria-pressed="true"] { background: rgba(255,196,107,.2); border-color: rgba(255,196,107,.65); color: #ffe1ad; box-shadow: 0 0 10px rgba(255,196,107,.25); }
+.gmoon { color: #cfdcf5; }
+.gmoon i { border-left-color: #cfdcf5; }
+.orbit.show ~ .gmoon { opacity: 0; }

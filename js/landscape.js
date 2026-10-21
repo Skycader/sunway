@@ -284,16 +284,23 @@ function createLandscape(scene, renderer) {
   // ---------------- освещение по Солнцу ----------------
   const S = THREE.MathUtils.smoothstep, mix = (a, b, t) => a + (b - a) * t;
   let seeThrough = false;
-  function update(dir, time, markerOnly) {
+  const mixDir = new THREE.Vector3();
+  function update(dir, time, markerOnly, moon) {
     if (markerOnly !== seeThrough) { seeThrough = markerOnly; setGroundSeeThrough(seeThrough); }
     const h = dir.y;
     const day = S(h, -0.12, 0.25), twi = Math.exp(-Math.pow(h / 0.14, 2));
     // цвет горизонта — тот же, что в небесном шейдере: туман сливает дальние предметы с небом
     scene.fog.color.setRGB(mix(0.025, 0.64, day), mix(0.04, 0.79, day), mix(0.09, 0.95, day));
-    sun.position.copy(dir).multiplyScalar(200).add(SHADOW_C);
-    sun.intensity = 1.25 * S(h, -0.02, 0.2);
-    sun.color.setRGB(1, mix(0.58, 0.97, S(h, 0, 0.3)), mix(0.32, 0.9, S(h, 0, 0.3)));
-    hemi.intensity = mix(0.22, 1.05, day);
+    // единственный источник с тенями — смесь Солнца и Луны: направление и цвет по весам, пока одно не победит другое
+    const wS = 1.25 * S(h, -0.02, 0.2), wM = moon ? moon.k : 0;
+    mixDir.copy(dir).multiplyScalar(wS);
+    if (wM > 0) mixDir.addScaledVector(moon.dir, wM);
+    if (mixDir.lengthSq() < 1e-6) mixDir.copy(dir); else mixDir.normalize();
+    sun.position.copy(mixDir).multiplyScalar(200).add(SHADOW_C);
+    sun.intensity = wS + wM;
+    const f = wM / Math.max(1e-6, wS + wM);
+    sun.color.setRGB(mix(1, 0.78, f), mix(mix(0.58, 0.97, S(h, 0, 0.3)), 0.86, f), mix(mix(0.32, 0.9, S(h, 0, 0.3)), 1.0, f));
+    hemi.intensity = mix(0.22, 1.05, day) + 0.5 * wM * (1 - day);
     hemi.color.setRGB(mix(0.10, 0.65, day) + twi * 0.22, mix(0.13, 0.78, day) + twi * 0.08, mix(0.25, 0.95, day));
     hemi.groundColor.setRGB(mix(0.03, 0.30, day), mix(0.03, 0.32, day), mix(0.04, 0.22, day));
     const night = 1 - day;
