@@ -5,7 +5,7 @@
 //   запад  (+X) — красно-белая телевышка с огоньком
 // Всё неподвижно и не зависит от положения наблюдателя. Освещается тем же Солнцем, что и небо.
 // Единицы — метры, глаз наблюдателя в начале координат, земля на GROUND ниже.
-function createLandscape(scene) {
+function createLandscape(scene, renderer) {
   const GROUND = -1.7;
   const mats = [];                      // материалы, которые зависят от времени суток
   const rng = (seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; })(20250);
@@ -13,12 +13,59 @@ function createLandscape(scene) {
 
   const hemi = new THREE.HemisphereLight(0xaecbf2, 0x4a4d38, 0.7);
   const sun = new THREE.DirectionalLight(0xffffff, 1);
-  scene.add(hemi, sun);
+  scene.add(hemi, sun, sun.target);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 420 });
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.4;
+  const SHADOW_C = new THREE.Vector3(0, 0, -50);   // центр области теней: дом и деревья
+  sun.target.position.copy(SHADOW_C);
   scene.fog = new THREE.Fog(0x99b8d8, 250, 1500);
 
   const root = new THREE.Group();
   root.position.y = GROUND;
   scene.add(root);
+
+  // ---------------- земля: трава ----------------
+  const grassTex = (() => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 1024;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#4a6a2b'; c.fillRect(0, 0, 1024, 1024);
+    const wrap = (x, y, fn) => { for (const dx of [0, -1024, 1024]) for (const dy of [0, -1024, 1024]) fn(x + dx, y + dy); };
+    for (let i = 0; i < 90; i++) {                                           // крупные пятна: суше / сочнее
+      const x = rng() * 1024, y = rng() * 1024, r = 60 + rng() * 140, dry = rng() < 0.4;
+      wrap(x, y, (px, py) => {
+        const g = c.createRadialGradient(px, py, 0, px, py, r);
+        g.addColorStop(0, dry ? 'rgba(128,128,60,.30)' : 'rgba(40,90,30,.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g; c.fillRect(px - r, py - r, r * 2, r * 2);
+      });
+    }
+    const greens = ['#2f5a22', '#3d6d2a', '#557f33', '#6a9040', '#7a9a45', '#8aa44e', '#255019', '#4a7a2c'];
+    c.lineCap = 'round';
+    for (let i = 0; i < 26000; i++) {                                        // травинки
+      const x = rng() * 1024, y = rng() * 1024, h = 5 + rng() * 11, lean = (rng() - 0.5) * 7;
+      c.strokeStyle = greens[Math.floor(rng() * greens.length)]; c.globalAlpha = 0.55 + rng() * 0.4; c.lineWidth = 1 + rng() * 1.3;
+      wrap(x, y, (px, py) => { c.beginPath(); c.moveTo(px, py); c.quadraticCurveTo(px + lean * 0.3, py - h * 0.6, px + lean, py - h); c.stroke(); });
+    }
+    c.globalAlpha = 1;
+    for (let i = 0; i < 140; i++) {                                          // редкие цветки
+      const x = rng() * 1024, y = rng() * 1024;
+      c.fillStyle = rng() < 0.5 ? '#f2eee0' : '#f0d24a'; c.fillRect(x, y, 2, 2);
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(220, 220); t.anisotropy = 16;
+    return t;
+  })();
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3600, 3600), lambert(0xffffff, { map: grassTex }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.userData.noCast = true;
+  root.add(ground);
+  // для режима «Солнце всегда»: ниже горизонта светит указатель небесного шейдера, землю делаем полупрозрачной
+  function setGroundSeeThrough(on) {
+    ground.material.transparent = on; ground.material.opacity = on ? 0.3 : 1; ground.material.needsUpdate = true;
+  }
 
   // ---------------- север: гора ----------------
   function makeMountain() {
@@ -45,6 +92,7 @@ function createLandscape(scene) {
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, lambert(0xffffff, { vertexColors: true, flatShading: true }));
     m.position.set(0, -4, 770);
+    m.userData.noCast = m.userData.noReceive = true;
     return m;
   }
   root.add(makeMountain());
@@ -129,13 +177,13 @@ function createLandscape(scene) {
   root.add(makeKhrushchevka());
   // деревья: по краям и редко перед фасадом
   [[-30, -66, 'poplar', 13], [-26, -60, 'birch', 8], [-38, -72, 'poplar', 15], [-20, -63, 'spruce', 9], [-14, -57, 'birch', 6],
-   [-6, -56, 'spruce', 5], [10, -58, 'birch', 5.5], [18, -57, 'spruce', 6], [27, -64, 'poplar', 12], [33, -61, 'round', 8],
-   [39, -68, 'spruce', 10], [44, -72, 'poplar', 14], [48, -62, 'birch', 9], [-44, -66, 'round', 9], [0, -62, 'round', 4.5],
+   [-6, -56, 'spruce', 5], [4, -60, 'birch', 5.5], [18, -57, 'spruce', 6], [22, -62, 'poplar', 12], [33, -61, 'round', 8],
+   [39, -68, 'spruce', 10], [44, -72, 'poplar', 14], [48, -62, 'birch', 9], [-44, -66, 'round', 9],
    [-48, -80, 'spruce', 11], [52, -80, 'poplar', 16], [-33, -92, 'round', 10], [40, -95, 'birch', 9], [4, -97, 'spruce', 10]]
     .forEach(([x, z, k, h]) => root.add(tree(k, x, z, h)));
 
   // ---------------- восток: дорога с машинами ----------------
-  const ROAD_Z = 6.5, ROAD_W = 9, ROAD_LEN = 1100;
+  const ROAD_Z = 6.5, ROAD_W = 9, ROAD_LEN = 3400;
   function roadTexture() {
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
     const c = cv.getContext('2d');
@@ -148,18 +196,19 @@ function createLandscape(scene) {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(ROAD_LEN / 18, 1); tex.anisotropy = 16;
     return tex;
   }
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_LEN, ROAD_W), lambert(0xffffff, { map: roadTexture() }));
-  road.rotation.x = -Math.PI / 2; road.position.set(-(ROAD_LEN / 2 - 3), 0.03, ROAD_Z);
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_LEN, ROAD_W), lambert(0xffffff, { map: roadTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  road.rotation.x = -Math.PI / 2; road.position.set(0, 0.06, ROAD_Z);
+  road.userData.noCast = true;
   root.add(road);
   for (const s of [-1, 1]) {                                           // тротуары
     const w = new THREE.Mesh(new THREE.BoxGeometry(ROAD_LEN, 0.18, 2.4), lambert(0x8d8b84));
-    w.position.set(-(ROAD_LEN / 2 - 3), 0.09, ROAD_Z + s * (ROAD_W / 2 + 1.2)); root.add(w);
+    w.position.set(0, 0.09, ROAD_Z + s * (ROAD_W / 2 + 1.2)); w.userData.noCast = true; root.add(w);
   }
   // фонари вдоль дальней стороны
   const lampMat = new THREE.MeshBasicMaterial({ color: 0x2a2a2a });
   mats.push({ m: lampMat, k: 'lamp' });
   const poleMat = lambert(0x55585c);
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 30; i++) {
     const x = -20 - i * 42, z = ROAD_Z + ROAD_W / 2 + 2.2;
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 7.5, 6), poleMat); pole.position.set(x, 3.75, z);
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 2.4), poleMat); arm.position.set(x, 7.4, z - 1.1);
@@ -188,12 +237,30 @@ function createLandscape(scene) {
     g.scale.setScalar(0.96 + rng() * 0.1);
     return g;
   }
-  // колонна на восток (едут в −X, правая полоса — ближняя к наблюдателю), встречная полоса реже
-  let cx0 = -11;
-  for (let i = 0; i < 13; i++) { root.add(car(carColors[Math.floor(rng() * carColors.length)], cx0, ROAD_Z - 2.25, -1)); cx0 -= 6.6 + rng() * 2.6; }
-  for (const cx of [-165, -230, -330]) root.add(car(carColors[Math.floor(rng() * carColors.length)], cx, ROAD_Z - 2.25, -1));
-  cx0 = -34;
-  for (let i = 0; i < 6; i++) { root.add(car(carColors[Math.floor(rng() * carColors.length)], cx0, ROAD_Z + 2.25, 1)); cx0 -= 11 + rng() * 14; }
+  // одна машина на обочине: стоит на траве у ближнего тротуара, носом на восток
+  const parked = car(0x1d4e9e, -38, ROAD_Z - ROAD_W / 2 - 2.4 - 1.6, -1);
+  parked.position.y = 0; parked.rotation.y = Math.PI + 0.06;
+  root.add(parked);
+
+  // ---------------- тропинки к дому ----------------
+  // главная дорожка от тротуара к среднему подъезду, дорожка вдоль фасада и короткие
+  // «ножки» к каждому подъезду, плюс протоптанные тропки напрямик через траву
+  const walkMat = lambert(0x9a978f, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const dirtMat = lambert(0x7a6444, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  function strip(x1, z1, x2, z2, w, mat, y) {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(len, w), mat);
+    m.rotation.order = 'YXZ'; m.rotation.x = -Math.PI / 2; m.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+    m.position.set((x1 + x2) / 2, y, (z1 + z2) / 2); m.userData.noCast = true;
+    root.add(m);
+  }
+  const DOORS = [-15, -1, 13, 27], DOOR_Z = -72.4, WALK_Z = -67;
+  strip(-1, 1.8, -1, WALK_Z, 2.4, walkMat, 0.05);                         // главная дорожка
+  strip(-19, WALK_Z, 31, WALK_Z, 2.2, walkMat, 0.05);                     // вдоль фасада
+  for (const dx of DOORS) strip(dx, WALK_Z, dx, DOOR_Z + 0.2, 1.6, walkMat, 0.055);
+  strip(-1, -28, 13, WALK_Z, 0.9, dirtMat, 0.04);                         // тропки напрямик
+  strip(-1, -40, -15, WALK_Z, 0.9, dirtMat, 0.04);
+  strip(20, 1.8, 27, WALK_Z, 0.9, dirtMat, 0.04);
 
   // ---------------- запад: телевышка ----------------
   const towerRed = lambert(0xc9302c), towerWhite = lambert(0xf0f0ec);
@@ -210,17 +277,20 @@ function createLandscape(scene) {
     const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.4, 36, 6), towerRed); mast.position.y = H + 18; t.add(mast);
     const b = new THREE.Mesh(new THREE.SphereGeometry(1.1, 10, 8), beacon); b.position.y = H + 36; t.add(b);
     t.position.set(430, 0, -45);
+    t.traverse(o => { o.userData.noCast = o.userData.noReceive = true; });
     root.add(t);
   })();
 
   // ---------------- освещение по Солнцу ----------------
   const S = THREE.MathUtils.smoothstep, mix = (a, b, t) => a + (b - a) * t;
-  function update(dir, time) {
+  let seeThrough = false;
+  function update(dir, time, markerOnly) {
+    if (markerOnly !== seeThrough) { seeThrough = markerOnly; setGroundSeeThrough(seeThrough); }
     const h = dir.y;
     const day = S(h, -0.12, 0.25), twi = Math.exp(-Math.pow(h / 0.14, 2));
     // цвет горизонта — тот же, что в небесном шейдере: туман сливает дальние предметы с небом
     scene.fog.color.setRGB(mix(0.025, 0.64, day), mix(0.04, 0.79, day), mix(0.09, 0.95, day));
-    sun.position.copy(dir).multiplyScalar(100);
+    sun.position.copy(dir).multiplyScalar(200).add(SHADOW_C);
     sun.intensity = 1.25 * S(h, -0.02, 0.2);
     sun.color.setRGB(1, mix(0.58, 0.97, S(h, 0, 0.3)), mix(0.32, 0.9, S(h, 0, 0.3)));
     hemi.intensity = mix(0.22, 1.05, day);
@@ -233,5 +303,10 @@ function createLandscape(scene) {
       else if (k === 'beacon') { const on = night > 0.3 && Math.sin(time * 3) > 0; m.color.setRGB(on ? 1 : 0.25, on ? 0.1 : 0, 0); }
     }
   }
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = !o.userData.noCast;
+    o.receiveShadow = !o.userData.noReceive;
+  });
   return { update };
 }

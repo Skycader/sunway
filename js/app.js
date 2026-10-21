@@ -8,7 +8,7 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 3000);
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.3, 3000);
   // Зум ×1 = поле зрения человека по длинной стороне экрана (бинокулярное, ~120°).
   // Шире прямолинейная проекция не умеет: к 180° картинка растягивается до бесконечности.
   const EYE_FOV = 120;
@@ -132,7 +132,7 @@
   spin.add(new THREE.Points(starGeo, starMat));
   tilt.add(spin);
   scene.add(tilt);
-  const landscape = createLandscape(scene);
+  const landscape = createLandscape(scene, renderer);
 
   // ================== АСТРОНОМИЯ (упрощённая) ==================
   // H_g — часовой угол солнца на Гринвиче, dec — склонение солнца
@@ -841,7 +841,7 @@
     const sol = solar(simTime);
     const s = skySun(sol, observer.lat, observer.lon);
     skyMat.uniforms.uSun.value.copy(s.dir);
-    landscape.update(s.dir, now / 1000);
+    landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0);
     starMat.uniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(s.dir.y, -0.21, -0.03);
     tilt.rotation.x = Math.PI / 2 - observer.lat * DEG;
     spin.rotation.y = -s.lst;
