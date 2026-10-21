@@ -1327,7 +1327,7 @@
     tilt.updateMatrixWorld(true);
     const dayK = THREE.MathUtils.smoothstep(s.dir.y, -0.12, 0.25);
     const mo = updateMoon(sol, dayK);
-    if (!paused) landscape.tick(dt);
+    if (!paused) landscape.tick(dt * speed);       // самолёт живёт в том же ускоренном времени, что Солнце и Луна
     landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0, mo);
     if (trackPlane) {
       const pi = landscape.airport.info();
@@ -1335,7 +1335,7 @@
       else {
         const p = pi.pos, len = p.length();
         const ty = Math.PI - Math.atan2(-p.x, p.z) + trackOff.yaw, tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, p.y / len))) + trackOff.pitch));
-        const k = 1 - Math.exp(-dt * 6);
+        const k = speed > 3 ? 1 : 1 - Math.exp(-dt * 6);      // при ускорении самолёт быстрый: камера без запаздывания
         let dy = ty - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         yaw += dy * k; pitch += (tp - pitch) * k;
       }

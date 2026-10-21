@@ -114,6 +114,7 @@ function createAirport({ root, lambert, rng }) {
       if (y < -0.95) cc.copy(grey);
       else if (y > -0.5 && y < -0.12 && x > -13 && x < 15.2) cc.copy(gold);
       if (x < -15.5 && y > -0.2) cc.copy(gold);
+      if (x > 18.3) cc.set(0x8b929b);                       // радиопрозрачный обтекатель носа
       col[i * 3] = cc.r; col[i * 3 + 1] = cc.g; col[i * 3 + 2] = cc.b;
     }
     fusGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -130,20 +131,43 @@ function createAirport({ root, lambert, rng }) {
   for (const s of [-1, 1]) for (let i = 0; i < 28; i++) { mtx.makeTranslation(-9.2 + i * 0.82, 0.5, s * 1.91); wins.setMatrixAt(wi++, mtx); }
   wins.instanceMatrix.needsUpdate = true;
   plane.add(wins);
-  // кабина экипажа: два лобовых стекла и по два боковых окна с рамками. Каждая панель стоит на поверхности носа и смотрит по её нормали
-  // (lookAt направляет локальную ось Z), блок чуть утоплен в обшивку, а стекло выступает и выигрывает за счёт polygonOffset
-  const origin = new THREE.Vector3(), nrm = new THREE.Vector3();
-  function pane(w, h, x, y, z, nx, ny, nz) {
-    nrm.set(nx, ny, nz).normalize();
-    const f = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.08), frameMat), g = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), glassDark);
-    for (const m of [f, g]) { m.position.set(x, y, z); m.lookAt(origin.set(x, y, z).add(nrm)); }
-    g.translateZ(0.035);
-    plane.add(f, g);
+  // Кабина экипажа: шесть окон как у Boeing 737 — два лобовых стекла и по два боковых с каждой стороны. Каждое окно — «лоскут»,
+  // выкроенный по самой поверхности носа (радиус берём из профиля фюзеляжа), поэтому стекло изогнуто вместе с носом, а не торчит
+  // плоской плиткой. Под стеклом такой же лоскут чуть больше — тёмная рамка. Цвет стекла по вертикали: блик сверху → тёмное снизу.
+  function rAt(x) {
+    for (let i = 0; i < prof.length - 1; i++) { const a = prof[i], b = prof[i + 1]; if (x >= a[1] && x <= b[1]) return a[0] + (b[0] - a[0]) * (x - a[1]) / (b[1] - a[1]); }
+    return 0;
   }
-  for (const s of [-1, 1]) {
-    pane(1.0, 0.62, 16.5, 1.38, s * 0.62, 0.25, 0.916, s * 0.40);     // лобовые
-    pane(0.82, 0.5, 15.0, 0.95, s * 1.53, 0.12, 0.52, s * 0.85);        // передние боковые
-    pane(0.64, 0.46, 13.9, 0.95, s * 1.68, 0.05, 0.49, s * 0.87);        // задние боковые
+  const glassMatC = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+  const frameMatC = new THREE.MeshBasicMaterial({ color: 0x23282f, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
+  function patch(corners, grow, side, mat, shade) {
+    // corners: A(верх-назад), B(низ-назад), C(низ-вперёд), D(верх-вперёд) в координатах (x вдоль фюзеляжа, θ от верха, градусы)
+    const N = 8, pos = [], col = [], idx = [], [A, B, C, D] = corners, cc = new THREE.Color();
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+      const u = i / N, v = j / N;
+      const x = (A[0] * (1 - u) + B[0] * u) * (1 - v) + (D[0] * (1 - u) + C[0] * u) * v;
+      const th = ((A[1] * (1 - u) + B[1] * u) * (1 - v) + (D[1] * (1 - u) + C[1] * u) * v) * Math.PI / 180;
+      const r = rAt(x) + grow;
+      pos.push(x, r * Math.cos(th), side * r * Math.sin(th));
+      if (shade) { cc.setRGB(0.04, 0.08, 0.13).lerp(new THREE.Color(0.30, 0.46, 0.60), Math.pow(1 - u, 2.2) * (0.35 + 0.65 * (1 - v))); col.push(cc.r, cc.g, cc.b); }
+    }
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const a = i * (N + 1) + j; idx.push(a, a + 1, a + N + 1, a + 1, a + N + 2, a + N + 1); }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    if (shade) g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    plane.add(new THREE.Mesh(g, mat));
+  }
+  const WINDOWS = [
+    [[15.55, 6], [15.85, 40], [16.95, 40], [16.75, 6]],       // лобовое стекло
+    [[14.5, 47], [14.9, 78], [15.75, 78], [15.4, 47]],         // переднее боковое
+    [[13.45, 53], [13.8, 80], [14.3, 80], [14.1, 53]],         // заднее боковое
+  ];
+  for (const side of [-1, 1]) for (const w of WINDOWS) {
+    const cx = w.reduce((s, c) => s + c[0], 0) / 4, cth = w.reduce((s, c) => s + c[1], 0) / 4;
+    const grown = w.map(c => [cx + (c[0] - cx) * 1.12 + (c[0] > cx ? 0.05 : -0.05), cth + (c[1] - cth) * 1.1 + (c[1] > cth ? 3 : -3)]);
+    patch(grown, 0.012, side, frameMatC, false);
+    patch(w, 0.02, side, glassMatC, true);
   }
   // крылья и оперение выдавливаем из контура в плане
   function surface(points, depth, mirror) {
