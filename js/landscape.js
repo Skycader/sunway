@@ -90,7 +90,7 @@ function createLandscape(scene, renderer) {
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.computeVertexNormals();
-    const m = new THREE.Mesh(g, lambert(0xffffff, { vertexColors: true, flatShading: true }));
+    const m = new THREE.Mesh(g, lambert(0xffffff, { vertexColors: true }));
     m.position.set(0, -4, 770);
     m.userData.noCast = m.userData.noReceive = true;
     return m;
@@ -98,8 +98,8 @@ function createLandscape(scene, renderer) {
   root.add(makeMountain());
 
   // ---------------- общие деревья ----------------
-  const foliage = [0x3f6b34, 0x4d7d38, 0x2f5a30, 0x6b8f3a, 0x557f3d].map(c => lambert(c, { flatShading: true }));
-  const spruceMat = lambert(0x1f4a30, { flatShading: true });
+  const foliage = [0x3f6b34, 0x4d7d38, 0x2f5a30, 0x6b8f3a, 0x557f3d].map(c => lambert(c));
+  const spruceMat = lambert(0x1f4a30);
   const trunkMat = lambert(0x4a3a2a);
   const birchMat = lambert(0xd8d4c8);
   function tree(kind, x, z, h) {

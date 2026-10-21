@@ -34,10 +34,34 @@ const RU = {
   Alrescha: 'Альриша', Cebalrai: 'Себальрай', Kornephoros: 'Корнефорос', Hassaleh: 'Хассалех', Tureis: 'Турейс',
 };
 
+// созвездия: аббревиатура HYG → [английское, русское]
+const CON = {
+  And: ['Andromeda', 'Андромеда'], Ant: ['Antlia', 'Насос'], Aps: ['Apus', 'Райская Птица'], Aqr: ['Aquarius', 'Водолей'], Aql: ['Aquila', 'Орёл'],
+  Ara: ['Ara', 'Жертвенник'], Ari: ['Aries', 'Овен'], Aur: ['Auriga', 'Возничий'], Boo: ['Boötes', 'Волопас'], Cae: ['Caelum', 'Резец'],
+  Cam: ['Camelopardalis', 'Жираф'], Cnc: ['Cancer', 'Рак'], CVn: ['Canes Venatici', 'Гончие Псы'], CMa: ['Canis Major', 'Большой Пёс'],
+  CMi: ['Canis Minor', 'Малый Пёс'], Cap: ['Capricornus', 'Козерог'], Car: ['Carina', 'Киль'], Cas: ['Cassiopeia', 'Кассиопея'],
+  Cen: ['Centaurus', 'Центавр'], Cep: ['Cepheus', 'Цефей'], Cet: ['Cetus', 'Кит'], Cha: ['Chamaeleon', 'Хамелеон'], Cir: ['Circinus', 'Циркуль'],
+  Col: ['Columba', 'Голубь'], Com: ['Coma Berenices', 'Волосы Вероники'], CrA: ['Corona Australis', 'Южная Корона'],
+  CrB: ['Corona Borealis', 'Северная Корона'], Crv: ['Corvus', 'Ворон'], Crt: ['Crater', 'Чаша'], Cru: ['Crux', 'Южный Крест'],
+  Cyg: ['Cygnus', 'Лебедь'], Del: ['Delphinus', 'Дельфин'], Dor: ['Dorado', 'Золотая Рыба'], Dra: ['Draco', 'Дракон'],
+  Equ: ['Equuleus', 'Малый Конь'], Eri: ['Eridanus', 'Эридан'], For: ['Fornax', 'Печь'], Gem: ['Gemini', 'Близнецы'], Gru: ['Grus', 'Журавль'],
+  Her: ['Hercules', 'Геркулес'], Hor: ['Horologium', 'Часы'], Hya: ['Hydra', 'Гидра'], Hyi: ['Hydrus', 'Южная Гидра'], Ind: ['Indus', 'Индеец'],
+  Lac: ['Lacerta', 'Ящерица'], Leo: ['Leo', 'Лев'], LMi: ['Leo Minor', 'Малый Лев'], Lep: ['Lepus', 'Заяц'], Lib: ['Libra', 'Весы'],
+  Lup: ['Lupus', 'Волк'], Lyn: ['Lynx', 'Рысь'], Lyr: ['Lyra', 'Лира'], Men: ['Mensa', 'Столовая Гора'], Mic: ['Microscopium', 'Микроскоп'],
+  Mon: ['Monoceros', 'Единорог'], Mus: ['Musca', 'Муха'], Nor: ['Norma', 'Наугольник'], Oct: ['Octans', 'Октант'], Oph: ['Ophiuchus', 'Змееносец'],
+  Ori: ['Orion', 'Орион'], Pav: ['Pavo', 'Павлин'], Peg: ['Pegasus', 'Пегас'], Per: ['Perseus', 'Персей'], Phe: ['Phoenix', 'Феникс'],
+  Pic: ['Pictor', 'Живописец'], Psc: ['Pisces', 'Рыбы'], PsA: ['Piscis Austrinus', 'Южная Рыба'], Pup: ['Puppis', 'Корма'],
+  Pyx: ['Pyxis', 'Компас'], Ret: ['Reticulum', 'Сетка'], Sge: ['Sagitta', 'Стрела'], Sgr: ['Sagittarius', 'Стрелец'], Sco: ['Scorpius', 'Скорпион'],
+  Scl: ['Sculptor', 'Скульптор'], Sct: ['Scutum', 'Щит'], Ser: ['Serpens', 'Змея'], Sex: ['Sextans', 'Секстант'], Tau: ['Taurus', 'Телец'],
+  Tel: ['Telescopium', 'Телескоп'], Tri: ['Triangulum', 'Треугольник'], TrA: ['Triangulum Australe', 'Южный Треугольник'], Tuc: ['Tucana', 'Тукан'],
+  UMa: ['Ursa Major', 'Большая Медведица'], UMi: ['Ursa Minor', 'Малая Медведица'], Vel: ['Vela', 'Паруса'], Vir: ['Virgo', 'Дева'],
+  Vol: ['Volans', 'Летучая Рыба'], Vul: ['Vulpecula', 'Лисичка'],
+};
+
 const csv = fs.readFileSync(process.argv[2], 'utf8').split('\n');
 const parse = l => { const o = []; let c = '', q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { o.push(c); c = ''; } else c += ch; } o.push(c); return o; };
 const head = parse(csv[0]), col = n => head.indexOf(n);
-const [iId, iProper, iRa, iDec, iMag, iCi] = ['id', 'proper', 'ra', 'dec', 'mag', 'ci'].map(col);
+const [iId, iProper, iRa, iDec, iMag, iCi, iCon, iSpect, iDist, iLum] = ['id', 'proper', 'ra', 'dec', 'mag', 'ci', 'con', 'spect', 'dist', 'lum'].map(col);
 
 const stars = [];
 for (let i = 1; i < csv.length; i++) {
@@ -46,7 +70,7 @@ for (let i = 1; i < csv.length; i++) {
   if (r[iId] === '0') continue;                // Солнце
   const mag = +r[iMag];
   if (!(mag <= MAG_LIMIT)) continue;
-  stars.push({ ra: +r[iRa], dec: +r[iDec], mag, bv: r[iCi] === '' ? 0.6 : +r[iCi], name: r[iProper] });
+  stars.push({ ra: +r[iRa], dec: +r[iDec], mag, bv: r[iCi] === '' ? 0.6 : +r[iCi], name: r[iProper], con: r[iCon], spect: r[iSpect], dist: +r[iDist], lum: r[iLum] === '' ? null : +r[iLum] });
 }
 stars.sort((a, b) => a.mag - b.mag);            // самые яркие первыми: индексы имён стабильны
 
@@ -57,7 +81,12 @@ stars.forEach((s, i) => {
   buf.writeInt16LE(Math.round(s.dec / 90 * 32767), i * 6 + 2);
   buf.writeUInt8(clamp(Math.round((s.mag + 2) * 20), 0, 255), i * 6 + 4);
   buf.writeInt8(clamp(Math.round(s.bv * 40), -127, 127), i * 6 + 5);
-  if (s.name && s.mag <= NAME_LIMIT && !/ [B-Z]$/.test(s.name)) names.push([i, s.name, RU[s.name] || s.name]);
+  if (s.name && s.mag <= NAME_LIMIT && !/ [B-Z]$/.test(s.name)) {
+    // расстояние в св. годах (в HYG 100000 пк = неизвестно), светимость в светимостях Солнца; нет данных → null
+    const ly = s.dist > 0 && s.dist < 99999 ? Math.round(s.dist * 3.26156 * 10) / 10 : null;
+    const lum = s.lum && s.lum > 0 ? +Number(s.lum.toPrecision(3)) : null;
+    names.push([i, s.name, RU[s.name] || s.name, s.con || null, (s.spect || '').replace(/\.+$/, '') || null, ly, lum]);
+  }
 });
 
 const out = `// Сгенерировано tools/build-stars.js из каталога HYG v4.1 (CC BY-SA 4.0, https://github.com/astronexus/HYG-Database).
@@ -65,8 +94,10 @@ const out = `// Сгенерировано tools/build-stars.js из катал�
 // мера яркости uint8 ((m + 2) · 20), B−V int8 (· 40).
 const STAR_COUNT = ${stars.length};
 const STAR_B64 = "${buf.toString('base64')}";
-// [индекс звезды, английское имя, русское имя]
+// [индекс звезды, английское имя, русское имя, созвездие, спектральный класс, расстояние (св. лет), светимость (L☉)]
 const STAR_NAMES = ${JSON.stringify(names)};
+// созвездия, встречающиеся в таблице: [английское, русское]
+const CONSTELLATIONS = ${JSON.stringify(Object.fromEntries([...new Set(names.map(n => n[3]).filter(Boolean))].map(k => [k, CON[k] || [k, k]])))};
 `;
 const dest = path.join(__dirname, '..', 'js', 'stars-data.js');
 fs.writeFileSync(dest, out);

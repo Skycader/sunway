@@ -152,6 +152,7 @@
   // ---------- подписи звёзд: кольцо, от него наклонная линия и название на полке ----------
   const labels = $('labels'), lctx = labels.getContext('2d'), starLabelsOn = $('starLabels');
   const starPos = new THREE.Vector3();
+  let markStar = -1, markUntil = 0, focusing = false;   // выбранная в поиске звезда и плавный наведение камеры
   const LBL = { ring: 6, diag: 14, lift: 3 };
   function drawStarLabels(night) {
     const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight;
@@ -159,9 +160,10 @@
     const c = lctx;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, W, H);
-    if (!starLabelsOn.checked) return;
+    if (markStar >= 0 && performance.now() > markUntil) markStar = -1;
     const fade = THREE.MathUtils.smoothstep(zoom, 1.25, 1.7) * THREE.MathUtils.smoothstep(night, 0.35, 0.9);
-    if (fade <= 0.01) return;
+    const enabled = starLabelsOn.checked && fade > 0.01;
+    if (!enabled && markStar < 0) return;
     // чем сильнее зум, тем более тусклые звёзды подписываем
     const maxMag = 0.3 + 2.2 * Math.log2(zoom / 1.25);
     const idx = I18N.lang === 'ru' ? 2 : 1;
@@ -169,11 +171,13 @@
     c.textBaseline = 'alphabetic';
     const placed = [];
     const hit = (x0, y0, x1, y1) => placed.some(r => x0 < r[2] && x1 > r[0] && y0 < r[3] && y1 > r[1]);
-    for (const n of STAR_NAMES) {
-      const i = n[0];
-      if (starMag[i] > maxMag) break;                     // имена отсортированы по яркости
+    // выбранная в поиске звезда подписывается всегда и первой, остальные — по яркости и зуму
+    const order = markStar >= 0 ? [STAR_NAMES.find(n => n[0] === markStar), ...STAR_NAMES.filter(n => n[0] !== markStar)] : STAR_NAMES;
+    for (const n of order) {
+      const i = n[0], forced = i === markStar;
+      if (!forced && (!enabled || starMag[i] > maxMag)) continue;   // имена отсортированы по яркости
       starPos.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld);
-      if (starPos.y < R * 0.03) continue;                 // ниже горизонта и в дымке у самой земли
+      if (!forced && starPos.y < R * 0.03) continue;      // ниже горизонта и в дымке у самой земли
       starPos.project(camera);
       if (starPos.z >= 1 || Math.abs(starPos.x) > 1 || Math.abs(starPos.y) > 1) continue;
       const sx = (starPos.x + 1) / 2 * W, sy = (1 - starPos.y) / 2 * H;
@@ -185,7 +189,7 @@
         const x0 = Math.min(p1x, p2x), x1 = Math.max(p1x, p2x), y0 = p1y - 16, y1 = p1y + 3;
         if (x0 < 4 || x1 > W - 4 || y0 < 4 || y1 > H - 4 || hit(x0, y0, x1, y1)) continue;
         placed.push([x0 - 4, y0 - 2, x1 + 4, y1 + 2]);
-        c.globalAlpha = fade;
+        c.globalAlpha = forced ? 1 : fade;
         c.strokeStyle = 'rgba(170,198,236,.7)'; c.lineWidth = 1;
         c.beginPath(); c.arc(sx, sy, LBL.ring, 0, Math.PI * 2); c.stroke();
         c.beginPath();
@@ -476,6 +480,7 @@
     el.addEventListener('pointerdown', e => {
       if (follow.checked) { follow.checked = false; saveFlag('follow', false); }
       drag = { x: e.clientX, y: e.clientY, yaw, pitch };
+      focusing = false;
       el.setPointerCapture(e.pointerId); el.classList.add('drag');
     });
     el.addEventListener('pointermove', e => {
@@ -758,13 +763,21 @@
     return new THREE.Vector3(Math.cos(la) * Math.cos(lo) * r, Math.sin(la) * r, -Math.cos(la) * Math.sin(lo) * r);
   }
   const yUp = new THREE.Vector3(0, 1, 0);
+  let observerSite = -1, obsMenu = null;   // индекс выбранной обсерватории или −1, если точка выбрана кликом по Земле
   function placeObserver() {
     const n = llToVec(observer.lat, observer.lon);
     obsGroup.position.copy(n).multiplyScalar(1.003);
     obsGroup.quaternion.setFromUnitVectors(yUp, n);
     $('obsCoord').textContent = fmtCoord(observer);
+    const o = OBSERVATORIES[observerSite], li = I18N.lang === 'ru' ? 1 : 0;
+    $('obsName').textContent = o ? o.name[li] + ' · ' + o.city[li] : '';
+    if (obsMenu) obsMenu.select(observerSite);
   }
   placeObserver();
+  obsMenu = initObservatoryMenu({
+    pick(i) { observerSite = i; observer.lat = OBSERVATORIES[i].lat; observer.lon = OBSERVATORIES[i].lon; placeObserver(); },
+  });
+  obsMenu.select(observerSite);
 
   // солнце мини-модели
   function glowTexture(stops) {
@@ -842,6 +855,7 @@
     return h ? h.point : null;
   }
   function moveObserverTo(pt) {
+    observerSite = -1;
     const l = earth.worldToLocal(pt.clone()).normalize();
     observer.lat = Math.asin(Math.max(-1, Math.min(1, l.y))) / DEG;
     observer.lon = Math.atan2(-l.z, l.x) / DEG;
@@ -902,6 +916,17 @@
   // ================== ЦИКЛ ==================
   let last = performance.now();
   let hudTick = 0;
+  const focusV = new THREE.Vector3();
+  const starWorld = (i, out) => out.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld);
+  initStarSearch({
+    mag: i => starMag[i],
+    night: () => starMat.uniforms.uNight.value,
+    world: starWorld,
+    focus(i) {
+      if (follow.checked) { follow.checked = false; saveFlag('follow', false); }
+      markStar = i; markUntil = performance.now() + 20000; focusing = true;
+    },
+  });
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
@@ -929,6 +954,16 @@
       let dy = (Math.PI - sunAz) - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       yaw += dy * k;
       pitch += (Math.max(-1.4, Math.min(1.5, sunAlt)) - pitch) * k;
+    }
+    if (focusing && !drag) {
+      starWorld(markStar, focusV);
+      const ty = Math.PI - Math.atan2(-focusV.x, focusV.z);
+      const tp = Math.max(-1.4, Math.min(1.5, Math.asin(focusV.y / focusV.length())));
+      const k = 1 - Math.exp(-dt * 5);
+      let dy = ty - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      yaw += dy * k; pitch += (tp - pitch) * k;
+      if (zoom < 3) { zoom = Math.min(3, zoom * Math.exp(dt * 2.5)); applyZoom(); }
+      if (Math.abs(dy) < 0.004 && Math.abs(tp - pitch) < 0.004 && zoom >= 3) focusing = false;
     }
     if (!drag) yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));   // держим угол в [-π, π], иначе он копится за сутки
     camera.rotation.y = yaw;
@@ -981,7 +1016,7 @@
     placeTicks(); placeMonths();
     $('pauseText').textContent = t(paused ? 'inPause' : 'playing');
     cards.forEach((c, i) => { c.el.textContent = t('cardinals')[i]; });
-    $('obsCoord').textContent = fmtCoord(observer);
+    placeObserver();
     hudTick = 0;
   });
 })();

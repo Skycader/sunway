@@ -11,6 +11,10 @@ const I18N = (() => {
       compass: 'Компас', starLabels: 'Подписывать звёзды', smooth: 'Плавное ускорение',
       hint: 'Клик по Земле переносит наблюдателя. Фон тяни, чтобы облететь планету.',
       speedLabel: 'Скорость времени',
+      searchStars: 'Искать звёзды', searchPlaceholder: 'Название звезды или созвездия…', pickObservatory: 'Выбрать обсерваторию', close: 'Закрыть',
+      colStar: 'Звезда', colStatus: 'Видна', colPos: 'Положение', colMag: 'Блеск, m', colLum: 'Светимость, L☉', colDist: 'Расстояние', colCon: 'Созвездие · класс',
+      visibleNow: 'Сейчас видна на небе', tooBright: 'Над горизонтом, но небо слишком светлое', belowHorizon: 'Под горизонтом',
+      alt: 'выс.', az: 'аз.', nothingFound: 'Ничего не найдено', lyUnit: 'св. лет',
       realtime: 'реальное время', paused: 'пауза', accel: 'ускорение',
       unitS: 'с', unitH: 'ч', unitMin: 'мин',
       dayIn: n => 'сутки за ' + n, polarNight: 'полярная ночь', polarDay: 'полярный день',
@@ -42,6 +46,10 @@ const I18N = (() => {
       compass: 'Compass', starLabels: 'Label stars', smooth: 'Smooth acceleration',
       hint: 'Click the Earth to move the observer. Drag the background to fly around the planet.',
       speedLabel: 'Time speed',
+      searchStars: 'Search stars', searchPlaceholder: 'Star or constellation name…', pickObservatory: 'Choose an observatory', close: 'Close',
+      colStar: 'Star', colStatus: 'Seen', colPos: 'Position', colMag: 'Mag', colLum: 'Luminosity, L☉', colDist: 'Distance', colCon: 'Constellation · class',
+      visibleNow: 'Visible in the sky now', tooBright: 'Above the horizon, but the sky is too bright', belowHorizon: 'Below the horizon',
+      alt: 'alt', az: 'az', nothingFound: 'Nothing found', lyUnit: 'ly',
       realtime: 'real time', paused: 'paused', accel: 'accelerated',
       unitS: 's', unitH: 'h', unitMin: 'min',
       dayIn: n => 'day in ' + n, polarNight: 'polar night', polarDay: 'polar day',
@@ -84,6 +92,7 @@ const I18N = (() => {
       document.documentElement.lang = lang;
       document.title = d.title;
       document.querySelectorAll('[data-i]').forEach(el => { el.textContent = d[el.dataset.i]; });
+      document.querySelectorAll('[data-i-ph]').forEach(el => { el.placeholder = d[el.dataset.iPh]; });
       document.querySelectorAll('[data-i-aria]').forEach(el => {
         const v = d[el.dataset.iAria];
         el.setAttribute('aria-label', v); if (el.tagName === 'BUTTON') el.title = v;

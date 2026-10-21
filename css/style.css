@@ -215,3 +215,106 @@ button#pause.paused .orb { opacity: .6; }
 
 /* подписи звёзд поверх неба, под панелями */
 canvas#labels { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+
+/* ---------- наблюдатель: кнопка с выбором обсерватории ---------- */
+button.obs-btn {
+  display: block; position: relative; width: 100%; text-align: left; color: var(--ink);
+  background: rgba(200,220,255,.05); border: 1px solid var(--glass-line); border-radius: 10px; padding: 7px 28px 7px 10px;
+  font-weight: 400; transition: background .2s, border-color .2s;
+}
+button.obs-btn:hover { background: rgba(200,220,255,.11); border-color: rgba(200,220,255,.34); }
+.obs-top { display: block; }
+.obs-name { display: block; margin-top: 3px; font: 600 12px var(--f-ui); color: var(--ink-dim); letter-spacing: .02em; }
+.obs-name:empty { display: none; }
+.obs-caret { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-dim); font-size: 12px; }
+.obs-btn[aria-expanded="true"] .obs-caret { transform: translateY(-50%) rotate(180deg); }
+.obs-menu {
+  position: fixed; z-index: 40; margin: 0; padding: 5px; list-style: none; overflow-y: auto; overscroll-behavior: contain;
+  background: rgba(10,16,30,.86); border: 1px solid var(--glass-line); border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.5); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+.obs-menu[hidden] { display: none; }
+.obs-menu li { display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.obs-menu li b { font: 600 13px var(--f-ui); color: var(--ink); }
+.obs-menu li span { font: 400 11.5px var(--f-num); color: var(--ink-dim); }
+.obs-menu li:hover { background: rgba(200,220,255,.12); }
+.obs-menu li[aria-selected="true"] b { color: var(--sun); }
+
+/* ---------- кнопка поиска звёзд рядом с галочкой ---------- */
+.check-row { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+  width: 26px; height: 26px; padding: 0; display: grid; place-items: center; line-height: 1; font-size: 14px;
+  border-radius: 8px; border: 1px solid var(--glass-line); background: rgba(200,220,255,.08); color: var(--ink); cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.icon-btn:hover { background: rgba(200,220,255,.16); border-color: rgba(200,220,255,.4); }
+.emoji { font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+
+/* ---------- окно поиска звёзд: стекло, как у кнопки на паузе ---------- */
+.modal {
+  position: fixed; inset: 0; z-index: 60; display: grid; grid-template-columns: minmax(0, 900px); justify-content: center; align-content: center; padding: 16px;
+  background: rgba(3,6,14,.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.modal[hidden] { display: none; }
+.modal-glass {
+  min-width: 0; max-height: min(82vh, 760px); display: flex; flex-direction: column; gap: 12px; padding: 14px;
+  background: rgba(200,220,255,.09); border: 1px solid var(--glass-line); border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(20px) saturate(1.2); -webkit-backdrop-filter: blur(20px) saturate(1.2);
+}
+.search-wrap { position: relative; }
+.search-wrap input {
+  width: 100%; box-sizing: border-box; padding: 11px 44px 11px 14px; font: 500 15px var(--f-ui); color: var(--ink);
+  background: rgba(0,0,0,.28); border: 1px solid var(--glass-line); border-radius: 10px;
+}
+.search-wrap input::placeholder { color: var(--ink-dim); }
+.search-wrap input:focus { outline: none; border-color: rgba(255,196,107,.7); }
+.search-wrap input::-webkit-search-cancel-button { display: none; }
+.modal-x {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; padding: 0;
+  background: transparent; color: var(--ink-dim); border: 0; border-radius: 8px; font-size: 14px;
+}
+.modal-x:hover { color: var(--ink); background: rgba(200,220,255,.12); }
+.star-table-wrap { overflow: auto; border-radius: 10px; min-height: 120px; }
+#starTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+/* шапка матовая и непрозрачная: строки под ней не просвечивают */
+#starTable th {
+  position: sticky; top: 0; z-index: 2; text-align: left; font: 800 11px var(--f-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--ink);
+  padding: 9px 10px; background: #141c2f; box-shadow: 0 1px 0 var(--glass-line), 0 6px 10px -6px rgba(0,0,0,.6); white-space: nowrap;
+}
+#starTable td { padding: 8px 10px; border-top: 1px solid rgba(200,220,255,.07); vertical-align: middle; }
+#starTable tbody tr { cursor: pointer; transition: background .15s; }
+#starTable tbody tr:hover { background: rgba(200,220,255,.12); }
+#starTable tr[hidden] { display: none; }
+#starTable .c-num { text-align: right; font-family: var(--f-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#starTable th.c-num { text-align: right; }
+#starTable .c-pos { font-family: var(--f-num); white-space: nowrap; color: var(--ink); }
+#starTable .c-lamp { text-align: center; width: 44px; }
+#starTable .c-name b { display: block; font-weight: 700; }
+#starTable small { display: block; color: var(--ink-dim); font-size: 11.5px; }
+#starTable .c-con span { display: block; }
+.lamp { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #3b4252; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.lamp.on { background: #5be37d; box-shadow: 0 0 8px 2px rgba(91,227,125,.65); }
+.star-empty { padding: 28px; text-align: center; color: var(--ink-dim); }
+.star-empty[hidden] { display: none; }
+@media (max-width: 620px) { #starTable .opt { display: none; } #starTable td, #starTable th { padding-left: 7px; padding-right: 7px; } }
+
+/* значок лупы в стиле игры: линза с блеском и искрой-звездой, ручка влево-вниз */
+.ico { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.ico-lens { stroke-width: 1.7; fill: rgba(200,220,255,.08); }
+.ico-shine { stroke-width: 1.3; opacity: .55; }
+.ico-spark { fill: var(--sun); stroke: none; }
+.ico-handle { stroke-width: 2.8; }
+.icon-btn:hover .ico-spark { filter: drop-shadow(0 0 3px var(--sun)); }
+
+/* стеклянные полосы прокрутки: тонкая, закруглённая «капля» ползунка на прозрачной дорожке */
+.star-table-wrap, .obs-menu { scrollbar-width: thin; scrollbar-color: rgba(200,220,255,.3) transparent; }
+.star-table-wrap::-webkit-scrollbar, .obs-menu::-webkit-scrollbar { width: 10px; height: 10px; }
+.star-table-wrap::-webkit-scrollbar-track, .obs-menu::-webkit-scrollbar-track { background: rgba(200,220,255,.04); border-radius: 10px; }
+.star-table-wrap::-webkit-scrollbar-thumb, .obs-menu::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(220,235,255,.34), rgba(160,190,235,.2));
+  border: 1px solid rgba(220,235,255,.28); border-radius: 10px; background-clip: padding-box;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+}
+.star-table-wrap::-webkit-scrollbar-thumb:hover, .obs-menu::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(255,214,150,.55), rgba(240,170,80,.4)); border-color: rgba(255,214,150,.5); }
+.star-table-wrap::-webkit-scrollbar-corner { background: transparent; }
