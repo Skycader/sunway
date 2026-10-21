@@ -406,16 +406,26 @@
 
   // обзор неба мышью
   let drag = null;
-  canvas.addEventListener('pointerdown', e => { if (follow.checked) { follow.checked = false; saveFlag('follow', false); } drag = { x: e.clientX, y: e.clientY, yaw, pitch }; canvas.setPointerCapture(e.pointerId); canvas.classList.add('drag'); });
-  canvas.addEventListener('pointermove', e => {
-    if (!drag) return;
-    const k = camera.fov * DEG / canvas.clientHeight;
-    yaw = drag.yaw + (e.clientX - drag.x) * k;
-    pitch = Math.max(-1.4, Math.min(1.5, drag.pitch + (e.clientY - drag.y) * k));
-  });
-  const endDrag = () => { drag = null; canvas.classList.remove('drag'); };
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
+  // по небу тянем 1:1 с углом экрана, по ленте компаса — в несколько раз быстрее и только по горизонту
+  const COMPASS_GAIN = 4;
+  function bindDrag(el, gain, horizontalOnly) {
+    el.addEventListener('pointerdown', e => {
+      if (follow.checked) { follow.checked = false; saveFlag('follow', false); }
+      drag = { x: e.clientX, y: e.clientY, yaw, pitch };
+      el.setPointerCapture(e.pointerId); el.classList.add('drag');
+    });
+    el.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const k = camera.fov * DEG / canvas.clientHeight * gain;
+      yaw = drag.yaw + (e.clientX - drag.x) * k;
+      if (!horizontalOnly) pitch = Math.max(-1.4, Math.min(1.5, drag.pitch + (e.clientY - drag.y) * k));
+    });
+    const end = () => { drag = null; el.classList.remove('drag'); };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+  bindDrag(canvas, 1, false);
+  bindDrag($('compass'), COMPASS_GAIN, true);
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * Math.exp(-e.deltaY * 0.0015)));

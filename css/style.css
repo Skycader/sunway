@@ -30,12 +30,13 @@ canvas#sky.drag { cursor: grabbing; }
 body.compass-on .hud { padding-top: calc(14px + var(--compass-h) + env(safe-area-inset-top, 0px)); }
 :root { --compass-h: 46px; }
 canvas#compass {
-  position: fixed; left: 0; top: 0; width: 100%; display: block; pointer-events: none;
+  position: fixed; left: 0; top: 0; width: 100%; display: block; pointer-events: auto; touch-action: none; cursor: ew-resize; user-select: none;
   height: calc(var(--compass-h) + env(safe-area-inset-top, 0px));
   background: linear-gradient(to bottom, rgba(5,9,20,.78), rgba(5,9,20,.45));
   border-bottom: 1px solid var(--glass-line);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
+canvas#compass.drag { cursor: grabbing; }
 canvas#compass[hidden] { display: none; }
 .todwrap { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
 #clockPanel input.tod { height: 26px; }
