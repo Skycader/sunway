@@ -9,6 +9,7 @@
 <canvas id="compass" hidden></canvas>
 
 <div class="hud">
+  <div class="hud-col">
   <div class="panel" id="clockPanel">
     <div class="clock" id="clock">--:--:--</div>
     <div class="date"><span data-i="localTime">местное время</span> · <span id="zone">UTC</span></div>
@@ -21,6 +22,26 @@
       <input type="range" id="tod" class="tod" min="0" max="1439" step="1" value="720">
       <div class="todticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
     </div>
+  </div>
+  <div class="panel zoom-panel" id="zoomPanel" data-i-tip="zoomTip">
+    <span class="lab" data-i="zoomLabel">Масштаб</span>
+    <div class="zoom-head">
+      <svg class="zoom-cam" id="zoomCam" viewBox="0 0 52 32" aria-hidden="true">
+        <rect class="cam-body" x="2" y="8" width="22" height="18" rx="4"/>
+        <path class="cam-top" d="M8 8V5.5a1.5 1.5 0 0 1 1.5-1.5h6A1.5 1.5 0 0 1 17 5.5V8"/>
+        <circle class="cam-led" cx="19.5" cy="12.5" r="1.1"/>
+        <circle class="cam-mount" cx="24" cy="17" r="6.6"/>
+        <rect class="cam-barrel" x="24" y="11.5" width="20" height="11" rx="2"/>
+        <g class="cam-glass"><circle class="cam-glass-ring" cx="26" cy="17" r="6.2"/><circle class="cam-glass-core" cx="26" cy="17" r="3"/><path class="cam-glint" d="M23.6 14.6a3.4 3.4 0 0 1 2.2-1.1"/></g>
+      </svg>
+      <div class="zoom-val"><b id="zoomVal">×1</b></div>
+    </div>
+    <input type="range" id="zoomRange" class="zoomrange" min="0" max="1000" step="1" value="0">
+    <div class="zoom-foot">
+      <span><span data-i="zoomFov">поле зрения</span> <b id="zoomFovV">120°</b></span>
+      <span><span data-i="sun">Солнце</span> <b id="zoomSunV">0,53°</b></span>
+    </div>
+  </div>
   </div>
   <div class="panel globe-panel" id="globePanel">
     <div class="globe-head"><span class="lab" data-i="orbitView">Вид с орбиты</span></div>

@@ -13,7 +13,7 @@
   // Шире прямолинейная проекция не умеет: к 180° картинка растягивается до бесконечности.
   const EYE_FOV = 120;
   const ZOOM_MIN = 1, ZOOM_MAX = 60;
-  let zoom = 1;
+  let zoom = 1, zoomSliding = false;
   function longFov() { return 2 * Math.atan(Math.tan(EYE_FOV / 2 * DEG) / zoom) / DEG; }
   function applyZoom() {
     const half = longFov() / 2 * DEG;
@@ -325,14 +325,6 @@
     if (c <= -1) return 24;
     return 2 * Math.acos(c) / DEG / 15;
   }
-  function zoomText() {
-    const z = zoom < 10 ? num(zoom.toFixed(1)) : String(Math.round(zoom));
-    const f = longFov();
-    // видимый размер Солнца с учётом увеличения, как в бинокле: 2·atan(зум · tg 16′)
-    const sun = 2 * Math.atan(zoom * Math.tan(0.2666 * DEG)) / DEG;
-    const fmt = v => (v < 10 ? v.toFixed(v < 1 ? 2 : 1) : Math.round(v).toString()).replace('.', t('decimal'));
-    return t('zoom') + ' ×' + z + ' (' + fmt(f) + '° / ' + fmt(sun) + '°)';
-  }
   // ---------- вес человека 70 кг при ускоренном вращении Земли ----------
   // При ×1 — нормальная сила тяжести эллипсоида WGS84 (формула Сомильяны): она уже учитывает
   // и сплюснутость Земли, и центробежную силу от настоящего вращения. Из неё выделяем чистую
@@ -354,21 +346,40 @@
   }
   function updDaylen() {
     const el = $('daylen');
-    let zl = $('zoomLine');
-    if (!zl) {
+    let wl = $('weightLine');
+    if (!wl) {
       el.textContent = '';
-      zl = document.createElement('span'); zl.id = 'zoomLine'; zl.className = 'zoomline';
-      const wl = document.createElement('span'); wl.id = 'weightLine'; wl.className = 'zoomline';
-      el.append(zl, document.createElement('br'), wl, document.createElement('br'), document.createElement('span'));
+      wl = document.createElement('span'); wl.id = 'weightLine'; wl.className = 'zoomline';
+      el.append(wl, document.createElement('br'), document.createElement('span'));
     }
-    zl.textContent = zoomText();
-    zl.title = t('zoomTip');
     const w = weightKg(observer.lat, speed);
-    const wl = $('weightLine');
     wl.textContent = t('weight')(fmtKg(w.kg)) + (w.gEff <= 0 ? ' · ' + t('weightless') : '');
     wl.title = t('weightTip');
     wl.classList.toggle('danger', w.gEff <= 0);
     el.lastChild.textContent = dayLenText(target);
+  }
+
+  // ---------- панель масштаба: камера с объективом, ползунок и числа; значения плавно «догоняют» зум ----------
+  const zVal = $('zoomVal'), zFovV = $('zoomFovV'), zSunV = $('zoomSunV'), zRange = $('zoomRange'), zCam = $('zoomCam');
+  let zShown = zoom;
+  const setText = (e, v) => { if (e.textContent !== v) e.textContent = v; };
+  const fmtDeg = v => (v < 10 ? v.toFixed(v < 1 ? 2 : 1) : Math.round(v).toString()).replace('.', t('decimal'));
+  zRange.addEventListener('pointerdown', () => { zoomSliding = true; });
+  addEventListener('pointerup', () => { zoomSliding = false; });
+  zRange.addEventListener('input', () => { zoom = ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, zRange.value / 1000); applyZoom(); });
+  function tickZoomUi(dt) {
+    zShown += (zoom - zShown) * (1 - Math.exp(-dt * 12));
+    if (Math.abs(zoom - zShown) < 0.0015 * zoom) zShown = zoom;
+    const span = Math.log(ZOOM_MAX / ZOOM_MIN);
+    const zpos = Math.log(zoom / ZOOM_MIN) / span, spos = Math.log(zShown / ZOOM_MIN) / span;
+    setText(zVal, '×' + (zShown < 10 ? num(zShown.toFixed(1)) : String(Math.round(zShown))));
+    // поле зрения по длинной стороне экрана и видимый размер Солнца с увеличением: 2·atan(зум · tg 16′)
+    setText(zFovV, fmtDeg(2 * Math.atan(Math.tan(EYE_FOV / 2 * DEG) / zShown) / DEG) + '°');
+    setText(zSunV, fmtDeg(2 * Math.atan(zShown * Math.tan(0.2666 * DEG)) / DEG) + '°');
+    if (!zoomSliding) zRange.value = Math.round(zpos * 1000);
+    zRange.style.setProperty('--p', (zpos * 100).toFixed(1) + '%');
+    zRange.setAttribute('aria-label', t('zoomLabel'));
+    zCam.style.setProperty('--zs', (0.12 + 0.88 * spos).toFixed(3));      // объектив «выезжает» по мере увеличения
   }
   function dayLenText(mult) {
     const sol = solar(simTime);
@@ -1058,7 +1069,7 @@
     placeTicks();
     placeMonths();
     sizeGlobe();
-    panelRects = [$('clockPanel').getBoundingClientRect(), $('globePanel').getBoundingClientRect()];
+    panelRects = [$('clockPanel').getBoundingClientRect(), $('zoomPanel').getBoundingClientRect(), $('globePanel').getBoundingClientRect()];
     if (!compass.hidden) panelRects.push(compass.getBoundingClientRect());
   }
   addEventListener('resize', resize);
@@ -1175,6 +1186,7 @@
       if (zoom < 3) { zoom = Math.min(3, zoom * Math.exp(dt * 2.5)); applyZoom(); }
       if (Math.abs(dy) < 0.004 && Math.abs(tp - pitch) < 0.004 && zoom >= 3) focusing = false;
     }
+    tickZoomUi(dt);
     if (!drag) yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));   // держим угол в [-π, π], иначе он копится за сутки
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
