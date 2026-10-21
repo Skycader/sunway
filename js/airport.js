@@ -119,14 +119,32 @@ function createAirport({ root, lambert, rng }) {
     fusGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   }
   plane.add(new THREE.Mesh(fusGeo, lambert(0xffffff, { vertexColors: true })));
-  const dark = lambert(0x161c24);
-  const winGeo = new THREE.BoxGeometry(0.3, 0.42, 0.08);
-  const wins = new THREE.InstancedMesh(winGeo, dark, 2 * 28);
+  // Мерцание иллюминаторов было z-fighting: коробочка толщиной 8 см лежала почти на самой обшивке, а на 400–1500 м буфер глубины
+  // различает десятки сантиметров, поэтому две поверхности «спорили» за пиксель. Теперь окна выступают на 5 см, а материал
+  // со смещением полигонов (polygonOffset) всегда выигрывает у обшивки.
+  const glassDark = new THREE.MeshBasicMaterial({ color: 0x0f1a27, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const frameMat = new THREE.MeshBasicMaterial({ color: 0xc9cdd3, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const winGeo = new THREE.BoxGeometry(0.3, 0.42, 0.1);
+  const wins = new THREE.InstancedMesh(winGeo, glassDark, 2 * 28);
   let wi = 0;
-  for (const s of [-1, 1]) for (let i = 0; i < 28; i++) { mtx.makeTranslation(-9.2 + i * 0.82, 0.5, s * 1.88); wins.setMatrixAt(wi++, mtx); }
+  for (const s of [-1, 1]) for (let i = 0; i < 28; i++) { mtx.makeTranslation(-9.2 + i * 0.82, 0.5, s * 1.91); wins.setMatrixAt(wi++, mtx); }
   wins.instanceMatrix.needsUpdate = true;
   plane.add(wins);
-  for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 0.1), dark); w.position.set(16.0, 0.85, s * 1.2); w.rotation.y = s * -0.75; plane.add(w); }   // лобовые стёкла
+  // кабина экипажа: два лобовых стекла и по два боковых окна с рамками. Каждая панель стоит на поверхности носа и смотрит по её нормали
+  // (lookAt направляет локальную ось Z), блок чуть утоплен в обшивку, а стекло выступает и выигрывает за счёт polygonOffset
+  const origin = new THREE.Vector3(), nrm = new THREE.Vector3();
+  function pane(w, h, x, y, z, nx, ny, nz) {
+    nrm.set(nx, ny, nz).normalize();
+    const f = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.08), frameMat), g = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), glassDark);
+    for (const m of [f, g]) { m.position.set(x, y, z); m.lookAt(origin.set(x, y, z).add(nrm)); }
+    g.translateZ(0.035);
+    plane.add(f, g);
+  }
+  for (const s of [-1, 1]) {
+    pane(1.0, 0.62, 16.5, 1.38, s * 0.62, 0.25, 0.916, s * 0.40);     // лобовые
+    pane(0.82, 0.5, 15.0, 0.95, s * 1.53, 0.12, 0.52, s * 0.85);        // передние боковые
+    pane(0.64, 0.46, 13.9, 0.95, s * 1.68, 0.05, 0.49, s * 0.87);        // задние боковые
+  }
   // крылья и оперение выдавливаем из контура в плане
   function surface(points, depth, mirror) {
     const sh = new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x, y)));
@@ -149,7 +167,7 @@ function createAirport({ root, lambert, rng }) {
   const engMat = lambert(0xa8aeb6);
   for (const s of [-1, 1]) {
     const e = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 0.95, 4.0, 18), engMat); e.rotation.z = Math.PI / 2; e.position.set(2.2, -1.75, s * 6.3);
-    const fan = new THREE.Mesh(new THREE.CircleGeometry(0.85, 16), lambert(0x30343a)); fan.rotation.y = Math.PI / 2; fan.position.set(4.22, -1.75, s * 6.3);
+    const fan = new THREE.Mesh(new THREE.CircleGeometry(0.85, 16), lambert(0x30343a)); fan.rotation.y = Math.PI / 2; fan.position.set(4.26, -1.75, s * 6.3);
     const py = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.3), engMat); py.position.set(1.4, -1.0, s * 6.3);
     plane.add(e, fan, py);
   }

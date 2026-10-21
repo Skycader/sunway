@@ -8,7 +8,7 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(70, 1, 0.3, 3000);
+  const camera = new THREE.PerspectiveCamera(70, 1, 1.0, 3000);
   // Зум ×1 = поле зрения человека по длинной стороне экрана (бинокулярное, ~120°).
   // Шире прямолинейная проекция не умеет: к 180° картинка растягивается до бесконечности.
   const EYE_FOV = 120;
@@ -225,7 +225,9 @@
   // ---------- подписи звёзд: кольцо, от него наклонная линия и название на полке ----------
   const labels = $('labels'), lctx = labels.getContext('2d'), starLabelsOn = $('starLabels');
   const starPos = new THREE.Vector3();
-  let markStar = -1, markUntil = 0, focusing = false, focusMoon = false, trackPlane = false;   // выбранная в поиске звезда и плавный наведение камеры
+  let markStar = -1, markUntil = 0, focusing = false, focusMoon = false, trackPlane = false;
+  // пока наведены на Солнце, Луну или самолёт, перетаскивание не сбрасывает наведение, а смещает угол обзора относительно цели
+  const trackOff = { yaw: 0, pitch: 0 }, OFF_YAW = 0.9, OFF_PITCH = 0.7;   // выбранная в поиске звезда и плавный наведение камеры
   const LBL = { ring: 6, diag: 14, lift: 3 };
   function drawStarLabels(night) {
     const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight;
@@ -233,6 +235,7 @@
     const c = lctx;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.clearRect(0, 0, W, H);
+    drawTargetLock(c, W, H);
     if (markStar >= 0 && performance.now() > markUntil) markStar = -1;
     const fade = THREE.MathUtils.smoothstep(zoom, 1.25, 1.7) * THREE.MathUtils.smoothstep(night, 0.35, 0.9);
     const enabled = starLabelsOn.checked && fade > 0.01;
@@ -566,14 +569,19 @@
   function bindDrag(el, gain, horizontalOnly) {
     el.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
-      if (follow.checked) { follow.checked = false; saveFlag('follow', false); }
-      drag = { x: e.clientX, y: e.clientY, yaw, pitch };
-      focusing = false; setMoonFocus(false); setPlaneTrack(false);
+      const tracking = follow.checked || focusMoon || trackPlane;
+      drag = { x: e.clientX, y: e.clientY, yaw, pitch, tracking, oy: trackOff.yaw, op: trackOff.pitch };
+      if (!tracking) focusing = false;                  // обычный облёт отменяет только перелёт к звезде
       el.setPointerCapture(e.pointerId); el.classList.add('drag');
     });
     el.addEventListener('pointermove', e => {
       if (!drag) return;
       const k = camera.fov * DEG / canvas.clientHeight * gain;
+      if (drag.tracking) {                              // наведены на цель: двигаем смещение, а не саму камеру
+        trackOff.yaw = Math.max(-OFF_YAW, Math.min(OFF_YAW, drag.oy + (e.clientX - drag.x) * k));
+        if (!horizontalOnly) trackOff.pitch = Math.max(-OFF_PITCH, Math.min(OFF_PITCH, drag.op + (e.clientY - drag.y) * k));
+        return;
+      }
       yaw = drag.yaw + (e.clientX - drag.x) * k;
       if (!horizontalOnly) pitch = Math.max(-1.4, Math.min(1.5, drag.pitch + (e.clientY - drag.y) * k));
     });
@@ -620,7 +628,7 @@
   // «Следовать»: камера сама поворачивается к Луне и сопровождает её (зум не трогаем), пока не потянешь небо или не нажмёшь снова
   function setMoonFocus(on) {
     focusMoon = on;
-    if (on) trackPlane = false;
+    if (on) { trackPlane = false; trackOff.yaw = trackOff.pitch = 0; }
     moonFocusBtn.setAttribute('aria-pressed', String(on)); updateFree();
     if (on) { focusing = false; markStar = -1; if (follow.checked) { follow.checked = false; saveFlag('follow', false); } }
   }
@@ -631,7 +639,7 @@
   smooth.addEventListener('change', () => saveFlag('smooth', smooth.checked));
   always.addEventListener('change', () => saveFlag('always', always.checked));
   // слежение за Солнцем и за Луной исключают друг друга
-  followBtn.addEventListener('click', () => { follow.checked = !follow.checked; saveFlag('follow', follow.checked); if (follow.checked) { setMoonFocus(false); setPlaneTrack(false); } });
+  followBtn.addEventListener('click', () => { follow.checked = !follow.checked; saveFlag('follow', follow.checked); if (follow.checked) { setMoonFocus(false); setPlaneTrack(false); trackOff.yaw = trackOff.pitch = 0; } });
   compassOn.addEventListener('change', () => { saveFlag('compass', compassOn.checked); applyCompass(); });
 
   // ---------- компас (пеленг по горизонтали взгляда) ----------
@@ -1131,6 +1139,7 @@
   }
 
   // ---------- лазерная указка: ПКМ сразу показывает расстояние до того, на что указали ----------
+  let lockStart = 0;
   const mAct = $('mAct'), mDot = $('mDot'), mCard = $('mCard'), mDist = $('mDist'), mName = $('mName'), mExtra = $('mExtra');
   const mRay = new THREE.Raycaster(), mNdc = new THREE.Vector2(), mV = new THREE.Vector3();
   const sunWorld = new THREE.Vector3(); let lastJD = 0;
@@ -1146,9 +1155,11 @@
     return grp(km / 1e12) + ' ' + t('trlKm');
   }
   const LY_KM = 9.4607e12;
+  const FLAT_LABELS = new Set(['ground', 'runway', 'taxiway', 'apron', 'road', 'sidewalk', 'path']);
   const planeExtra = p => grp(p.speed * 3.6) + ' ' + t('kmh') + ' · ' + t('mAlt') + ' ' + grp(p.alt) + ' ' + t('mUnit') + (t('mPhases')[p.phase] ? ' · ' + t('mPhases')[p.phase] : '');
   function setPlaneTrack(on) {
-    trackPlane = on;
+    trackPlane = on; lockStart = on ? performance.now() : 0;
+    if (on) trackOff.yaw = trackOff.pitch = 0;
     if (on) { focusing = false; markStar = -1; if (focusMoon) setMoonFocus(false); if (follow.checked) { follow.checked = false; saveFlag('follow', false); } }
     updateFree();
   }
@@ -1164,7 +1175,10 @@
     const pi = landscape.airport.info();
     if (pi.visible) {                                    // самолёт: мелкая цель, поэтому по угловой близости; ближе любой преграды
       const d = pi.pos.length(), a = Math.acos(Math.min(1, dir.dot(mV.copy(pi.pos).normalize())));
-      if (a < Math.max(camera.fov * DEG / innerHeight * 18, Math.atan(26 / d)) && (!hit || hit.distance > d)) {
+      // землю, полосу и перрон луч задевает у самых колёс раньше центра самолёта — они не считаются преградой
+      let blocked = false;
+      if (hit) { let o = hit.object; while (o && !o.userData.label) o = o.parent; const l = o && o.userData.label; blocked = hit.distance < d && l !== 'plane' && !FLAT_LABELS.has(l); }
+      if (a < Math.max(camera.fov * DEG / innerHeight * 22, Math.atan(30 / d)) && !blocked) {
         const live = () => { const p = landscape.airport.info(); return { dist: fmtMeters(p.pos.length()), extra: planeExtra(p) }; };
         return { name: t('mObjects').plane, ...live(), live, world: out => out.copy(landscape.airport.info().pos), action: { run: () => setPlaneTrack(!trackPlane) } };
       }
@@ -1209,6 +1223,51 @@
   }
   function hideMeasure() { measure = null; mDot.hidden = mCard.hidden = true; }
   // цель следует за точкой в мире: небо вращается, камера двигается — красная точка и карточка едут вместе
+  // Рамка захвата цели, как у ЗРК «Панцирь»: угловые скобки вокруг самолёта сжимаются в момент захвата, перекрестие и табличка
+  // с дистанцией, скоростью и высотой едут вместе с целью.
+  function drawTargetLock(c, W, H) {
+    if (!trackPlane) return;
+    const pi = landscape.airport.info();
+    if (!pi.visible) return;
+    mV.copy(pi.pos).project(camera);
+    if (mV.z >= 1 || Math.abs(mV.x) > 1.2 || Math.abs(mV.y) > 1.2) return;
+    const x = (mV.x + 1) / 2 * W, y = (1 - mV.y) / 2 * H, d = pi.pos.length();
+    const pxPerM = (H / 2) / Math.tan(camera.fov * DEG / 2) / d;
+    const age = Math.min(1, (performance.now() - lockStart) / 380), ease = 1 - Math.pow(1 - age, 3);
+    const half = Math.max(22, 21 * pxPerM + 10) * (1 + (1 - ease) * 1.6), len = Math.max(9, half * 0.34);
+    const red = age < 1 && Math.floor(age * 8) % 2 === 0 ? '#ffd2c2' : '#ff4a3a';
+    c.save();
+    c.globalAlpha = 0.35 + 0.65 * ease;
+    c.strokeStyle = red; c.fillStyle = red; c.lineWidth = 2.2; c.lineCap = 'square';
+    c.shadowColor = 'rgba(255,60,40,.85)'; c.shadowBlur = 8;
+    c.beginPath();
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {                 // четыре угловые скобки
+      const cx = x + sx * half, cy = y + sy * half;
+      c.moveTo(cx - sx * len, cy); c.lineTo(cx, cy); c.lineTo(cx, cy - sy * len);
+    }
+    c.stroke();
+    c.lineWidth = 1.4;                                                              // перекрестие в центре и риски по серединам сторон
+    c.beginPath();
+    c.moveTo(x - 7, y); c.lineTo(x - 2.5, y); c.moveTo(x + 2.5, y); c.lineTo(x + 7, y);
+    c.moveTo(x, y - 7); c.lineTo(x, y - 2.5); c.moveTo(x, y + 2.5); c.lineTo(x, y + 7);
+    for (const [ax, ay] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) { c.moveTo(x + ax * half, y + ay * half); c.lineTo(x + ax * (half - 5), y + ay * (half - 5)); }
+    c.stroke();
+    c.shadowBlur = 0;
+    // табличка
+    const l1 = (age < 1 ? t('lockAcquire') : t('lockTarget')) + ' · Boeing 737', l2 = fmtMeters(d), l3 = grp(pi.speed * 3.6) + ' ' + t('kmh') + ' · ' + grp(pi.alt) + ' ' + t('mUnit');
+    c.font = '700 11px "JetBrains Mono", monospace'; const w1 = c.measureText(l1).width;
+    c.font = '600 18px "JetBrains Mono", monospace'; const w2 = c.measureText(l2).width;
+    c.font = '500 11px "JetBrains Mono", monospace'; const w3 = c.measureText(l3).width;
+    const bw = Math.max(w1, w2, w3) + 16, bh = 62, right = x + half + 14 + bw < W - 6;
+    const bx = right ? x + half + 10 : x - half - 10 - bw, by = Math.max(54, Math.min(H - bh - 6, y - bh / 2));
+    c.fillStyle = 'rgba(10,16,30,.78)'; c.strokeStyle = 'rgba(255,74,58,.75)'; c.lineWidth = 1;
+    c.beginPath(); c.roundRect ? c.roundRect(bx, by, bw, bh, 8) : c.rect(bx, by, bw, bh); c.fill(); c.stroke();
+    c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+    c.fillStyle = '#ff6a5a'; c.font = '700 11px "JetBrains Mono", monospace'; c.fillText(l1, bx + 8, by + 16);
+    c.fillStyle = '#fff'; c.font = '600 18px "JetBrains Mono", monospace'; c.fillText(l2, bx + 8, by + 38);
+    c.fillStyle = 'rgba(200,220,255,.85)'; c.font = '500 11px "JetBrains Mono", monospace'; c.fillText(l3, bx + 8, by + 54);
+    c.restore();
+  }
   function updateMeasure() {
     if (!measure) return;
     if (measure.live) {                                  // самолёт летит: расстояние и скорость обновляем на лету
@@ -1270,19 +1329,19 @@
     const mo = updateMoon(sol, dayK);
     if (!paused) landscape.tick(dt);
     landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0, mo);
-    if (trackPlane && !drag) {
+    if (trackPlane) {
       const pi = landscape.airport.info();
       if (!pi.visible) setPlaneTrack(false);
       else {
         const p = pi.pos, len = p.length();
-        const ty = Math.PI - Math.atan2(-p.x, p.z), tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, p.y / len)))));
+        const ty = Math.PI - Math.atan2(-p.x, p.z) + trackOff.yaw, tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, p.y / len))) + trackOff.pitch));
         const k = 1 - Math.exp(-dt * 6);
         let dy = ty - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         yaw += dy * k; pitch += (tp - pitch) * k;
       }
     }
-    if (focusMoon && !drag && moonState.on) {
-      const ty = Math.PI - Math.atan2(-mo.dir.x, mo.dir.z), tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, mo.dir.y)))));
+    if (focusMoon && moonState.on) {
+      const ty = Math.PI - Math.atan2(-mo.dir.x, mo.dir.z) + trackOff.yaw, tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, mo.dir.y))) + trackOff.pitch));
       const k = 1 - Math.exp(-dt * 5);
       let dy = ty - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       yaw += dy * k; pitch += (tp - pitch) * k;
@@ -1292,9 +1351,9 @@
     const sunAlt = Math.asin(Math.max(-1, Math.min(1, s.dir.y)));
     if (follow.checked) {
       const k = 1 - Math.exp(-dt * 5);
-      let dy = (Math.PI - sunAz) - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      let dy = (Math.PI - sunAz + trackOff.yaw) - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       yaw += dy * k;
-      pitch += (Math.max(-1.4, Math.min(1.5, sunAlt)) - pitch) * k;
+      pitch += (Math.max(-1.4, Math.min(1.5, sunAlt + trackOff.pitch)) - pitch) * k;
     }
     if (focusing && !drag) {
       starWorld(markStar, focusV);
@@ -1307,7 +1366,8 @@
       if (Math.abs(dy) < 0.004 && Math.abs(tp - pitch) < 0.004 && zoom >= 3) focusing = false;
     }
     tickZoomUi(dt);
-    if (!drag) yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));   // держим угол в [-π, π], иначе он копится за сутки
+    if (!(follow.checked || focusMoon || trackPlane)) trackOff.yaw = trackOff.pitch = 0;   // отпустили цель — смещение забываем
+    if (!drag || drag.tracking) yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));   // держим угол в [-π, π], иначе он копится за сутки
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
     camera.updateMatrixWorld();
