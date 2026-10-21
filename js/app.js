@@ -564,6 +564,7 @@
   const COMPASS_GAIN = 4;
   function bindDrag(el, gain, horizontalOnly) {
     el.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
       if (follow.checked) { follow.checked = false; saveFlag('follow', false); }
       drag = { x: e.clientX, y: e.clientY, yaw, pitch };
       focusing = false; setMoonFocus(false);
@@ -1091,7 +1092,7 @@
     moonOut.k = 0;
     if (!on) return moonOut;
     const mp = Astro.moon(sol.jd), ph = Astro.moonPhase(sol.jd), sn = Astro.sun(sol.jd);
-    moonState.illum = ph.illum; moonState.waxing = ph.waxing;
+    moonState.illum = ph.illum; moonState.waxing = ph.waxing; moonState.ang = ph.angRadius; moonState.distKm = mp.dist;
     skyConv(Astro.unit(mp.ra, mp.dec), mDir);
     skyMoon.position.copy(mDir).multiplyScalar(880);
     skyMoon.scale.setScalar(880 * Math.tan(ph.angRadius));
@@ -1127,6 +1128,84 @@
     return moonOut;
   }
 
+  // ---------- лазерная указка: ПКМ сразу показывает расстояние до того, на что указали ----------
+  const mDot = $('mDot'), mCard = $('mCard'), mDist = $('mDist'), mName = $('mName'), mExtra = $('mExtra');
+  const mRay = new THREE.Raycaster(), mNdc = new THREE.Vector2(), mV = new THREE.Vector3();
+  const sunWorld = new THREE.Vector3(); let lastJD = 0;
+  let measure = null;                                   // { world(out) — где сейчас цель в мире }
+  const starDistLy = (() => { const b = Uint8Array.from(atob(STAR_DIST_B64), c => c.charCodeAt(0)), v = new DataView(b.buffer); return i => v.getUint16(i * 2, true); })();
+  const starInfo = new Map(STAR_NAMES.map(n => [n[0], n]));
+  const grp = n => new Intl.NumberFormat(t('locale')).format(Math.round(n));
+  const fmtLight = sec => { if (sec < 60) return num(sec.toFixed(1)) + ' ' + t('unitS'); return Math.floor(sec / 60) + ' ' + t('unitMin') + ' ' + Math.round(sec % 60) + ' ' + t('unitS'); };
+  function fmtMeters(m) { return m < 1000 ? grp(m) + ' ' + t('mUnit') : num((m / 1000).toFixed(m < 10000 ? 2 : 1)) + ' ' + t('kmUnit'); }
+  function fmtKm(km) {
+    if (km < 1e6) return grp(km) + ' ' + t('kmUnit');
+    if (km < 1e9) return num((km / 1e6).toFixed(1)) + ' ' + t('mlnKm');
+    return grp(km / 1e12) + ' ' + t('trlKm');
+  }
+  const LY_KM = 9.4607e12;
+  // «233 года», «1 год», «5 лет»
+  const yearsWord = n => I18N.lang !== 'ru' ? t('mYears') : (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет');
+
+  function pickTarget(cx, cy) {
+    mNdc.set(cx / innerWidth * 2 - 1, -(cy / innerHeight) * 2 + 1);
+    mRay.setFromCamera(mNdc, camera);
+    const dir = mRay.ray.direction;
+    // 1) ландшафт: ближайшее пересечение луча, расстояние в метрах
+    const hit = mRay.intersectObject(landscape.root, true)[0];
+    if (hit) {
+      let o = hit.object; while (o && !o.userData.label) o = o.parent;
+      const key = (o && o.userData.label) || 'ground', point = hit.point.clone();
+      return { name: t('mObjects')[key], dist: fmtMeters(hit.distance), extra: key === 'mountain' || key === 'tower' ? t('mApprox') : '', world: out => out.copy(point) };
+    }
+    // 2) небо: Луна, Солнце, звёзды — по угловой близости луча (не меньше 16 пикселей экрана)
+    const thr = camera.fov * DEG / innerHeight * 16, ang = v => Math.acos(Math.min(1, dir.dot(v)));
+    if (moonState.on && ang(moonOut.dir) < Math.max(moonState.ang * 1.25, thr)) {
+      const km = moonState.distKm;
+      return { name: t('mObjects').moon, dist: fmtKm(km), extra: '≈ ' + num((km / 6371).toFixed(1)) + ' ' + t('mEarthR') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(moonOut.dir).multiplyScalar(400) };
+    }
+    if (ang(sunWorld) < Math.max(0.00465 * 1.4, thr)) {
+      const au = Astro.sun(lastJD).distAU, km = au * 149597870.7;
+      return { name: t('mObjects').sun, dist: fmtKm(km), extra: num(au.toFixed(3)) + ' ' + t('mAU') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(sunWorld).multiplyScalar(400) };
+    }
+    let best = -1, bestScore = Infinity;
+    for (let i = 0; i < N; i++) {
+      mV.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld).normalize();
+      const a = ang(mV);
+      if (a < thr) { const sc = a / thr + (starMag[i] + 2) * 0.03; if (sc < bestScore) { bestScore = sc; best = i; } }
+    }
+    if (best >= 0) {
+      const info = starInfo.get(best), ly = starDistLy(best), i = best;
+      const name = info ? info[I18N.lang === 'ru' ? 2 : 1] : t('mObjects').star;
+      const extra = t('mMag') + ' ' + num(starMag[i].toFixed(1)) + 'm' + (ly ? ' · ' + t('mLight') + ' ' + grp(ly) + ' ' + yearsWord(Math.round(ly)) : '');
+      return { name, dist: ly ? (ly < 10 ? num(ly.toFixed(1)) : grp(ly)) + ' ' + t('lyUnit') : '—', extra: ly ? '≈ ' + fmtKm(ly * LY_KM) + ' · ' + extra : t('mNoData') + ' · ' + extra,
+        world: out => out.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld) };
+    }
+    const d = dir.clone();
+    return { name: t('mObjects').none, dist: '—', extra: '', world: out => out.copy(d).multiplyScalar(400) };
+  }
+  function showMeasure(res) {
+    measure = res;
+    mDist.textContent = res.dist; mName.textContent = res.name; mExtra.textContent = res.extra; mExtra.hidden = !res.extra;
+    mDot.hidden = mCard.hidden = false;
+  }
+  function hideMeasure() { measure = null; mDot.hidden = mCard.hidden = true; }
+  // цель следует за точкой в мире: небо вращается, камера двигается — красная точка и карточка едут вместе
+  function updateMeasure() {
+    if (!measure) return;
+    measure.world(mV).project(camera);
+    if (mV.z >= 1 || Math.abs(mV.x) > 1.05 || Math.abs(mV.y) > 1.05) { mDot.style.visibility = mCard.style.visibility = 'hidden'; return; }
+    const x = (mV.x + 1) / 2 * innerWidth, y = (1 - mV.y) / 2 * innerHeight;
+    mDot.style.visibility = mCard.style.visibility = 'visible';
+    mDot.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+    const w = mCard.offsetWidth, h = mCard.offsetHeight;
+    const cx = x + 18 + w > innerWidth - 8 ? x - 18 - w : x + 18, cy = y + 16 + h > innerHeight - 8 ? y - 16 - h : y + 16;
+    mCard.style.transform = `translate(${Math.max(8, cx)}px, ${Math.max(8, cy)}px)`;
+  }
+  canvas.addEventListener('contextmenu', e => { e.preventDefault(); showMeasure(pickTarget(e.clientX, e.clientY)); });
+  document.addEventListener('pointerdown', e => { if (e.button === 0) hideMeasure(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMeasure(); });
+
   let hudTick = 0;
   const focusV = new THREE.Vector3();
   const starWorld = (i, out) => out.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld);
@@ -1153,6 +1232,7 @@
 
     const sol = solar(simTime);
     const s = skySun(sol, observer.lat, observer.lon);
+    sunWorld.copy(s.dir); lastJD = sol.jd;
     skyMat.uniforms.uSun.value.copy(s.dir);
     starMat.uniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(s.dir.y, -0.21, -0.03);
     tilt.rotation.x = Math.PI / 2 - observer.lat * DEG;
@@ -1204,6 +1284,7 @@
     updatePointer(s.dir, alt);
     drawCompass((Math.PI - yaw) / DEG, ((sunAz / DEG) + 360) % 360, alt);
     renderer.render(scene, camera);
+    updateMeasure();
     drawStarLabels(starMat.uniforms.uNight.value);
 
     updateGlobe(sol);

@@ -74,13 +74,15 @@ for (let i = 1; i < csv.length; i++) {
 }
 stars.sort((a, b) => a.mag - b.mag);            // самые яркие первыми: индексы имён стабильны
 
-const buf = Buffer.alloc(stars.length * 6), names = [];
+const buf = Buffer.alloc(stars.length * 6), names = [], dist = Buffer.alloc(stars.length * 2);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 stars.forEach((s, i) => {
   buf.writeUInt16LE(Math.round(s.ra / 24 * 65536) & 0xffff, i * 6);
   buf.writeInt16LE(Math.round(s.dec / 90 * 32767), i * 6 + 2);
   buf.writeUInt8(clamp(Math.round((s.mag + 2) * 20), 0, 255), i * 6 + 4);
   buf.writeInt8(clamp(Math.round(s.bv * 40), -127, 127), i * 6 + 5);
+  // расстояние в св. годах для всех звёзд (0 — неизвестно); в HYG 100000 пк = нет данных
+  dist.writeUInt16LE(s.dist > 0 && s.dist < 99999 ? Math.min(65535, Math.round(s.dist * 3.26156)) : 0, i * 2);
   if (s.name && s.mag <= NAME_LIMIT && !/ [B-Z]$/.test(s.name)) {
     // расстояние в св. годах (в HYG 100000 пк = неизвестно), светимость в светимостях Солнца; нет данных → null
     const ly = s.dist > 0 && s.dist < 99999 ? Math.round(s.dist * 3.26156 * 10) / 10 : null;
@@ -94,6 +96,8 @@ const out = `// Сгенерировано tools/build-stars.js из катал�
 // мера яркости uint8 ((m + 2) · 20), B−V int8 (· 40).
 const STAR_COUNT = ${stars.length};
 const STAR_B64 = "${buf.toString('base64')}";
+// расстояния до звёзд, св. годы, uint16 на звезду в том же порядке (0 — нет данных)
+const STAR_DIST_B64 = "${dist.toString('base64')}";
 // [индекс звезды, английское имя, русское имя, созвездие, спектральный класс, расстояние (св. лет), светимость (L☉)]
 const STAR_NAMES = ${JSON.stringify(names)};
 // созвездия, встречающиеся в таблице: [английское, русское]

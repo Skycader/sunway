@@ -60,7 +60,7 @@ function createLandscape(scene, renderer) {
   })();
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(3600, 3600), lambert(0xffffff, { map: grassTex }));
   ground.rotation.x = -Math.PI / 2;
-  ground.userData.noCast = true;
+  ground.userData.noCast = true; ground.userData.label = 'ground';
   root.add(ground);
   // для режима «Солнце всегда»: ниже горизонта светит указатель небесного шейдера, землю делаем полупрозрачной
   function setGroundSeeThrough(on) {
@@ -92,7 +92,7 @@ function createLandscape(scene, renderer) {
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, lambert(0xffffff, { vertexColors: true }));
     m.position.set(0, -4, 770);
-    m.userData.noCast = m.userData.noReceive = true;
+    m.userData.noCast = m.userData.noReceive = true; m.userData.label = 'mountain';
     return m;
   }
   root.add(makeMountain());
@@ -116,7 +116,7 @@ function createLandscape(scene, renderer) {
       const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(h * (poplar ? 0.2 : 0.33), 1), foliage[Math.floor(rng() * foliage.length)]);
       crown.scale.set(1, poplar ? 2.6 : 0.9 + rng() * 0.25, 1); crown.position.y = h * (poplar ? 0.62 : 0.68); crown.rotation.y = rng() * 6; t.add(crown);
     }
-    t.position.set(x, 0, z);
+    t.position.set(x, 0, z); t.userData.label = 'tree';
     return t;
   }
 
@@ -171,7 +171,7 @@ function createLandscape(scene, renderer) {
     const vent = lambert(0x8b8678);
     for (const x of [-18, -2, 14]) { const v = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 1.4), vent); v.position.set(x, H + 1.2, 0.5); g.add(v); }
     for (const x of [-22, 5, 24]) { const a = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 3, 4), lambert(0x333333)); a.position.set(x, H + 2.2, -1); g.add(a); }
-    g.position.set(6, 0, -78);
+    g.position.set(6, 0, -78); g.userData.label = 'house';
     return g;
   }
   root.add(makeKhrushchevka());
@@ -198,11 +198,11 @@ function createLandscape(scene, renderer) {
   }
   const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_LEN, ROAD_W), lambert(0xffffff, { map: roadTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   road.rotation.x = -Math.PI / 2; road.position.set(0, 0.06, ROAD_Z);
-  road.userData.noCast = true;
+  road.userData.noCast = true; road.userData.label = 'road';
   root.add(road);
   for (const s of [-1, 1]) {                                           // тротуары
     const w = new THREE.Mesh(new THREE.BoxGeometry(ROAD_LEN, 0.18, 2.4), lambert(0x8d8b84));
-    w.position.set(0, 0.09, ROAD_Z + s * (ROAD_W / 2 + 1.2)); w.userData.noCast = true; root.add(w);
+    w.position.set(0, 0.09, ROAD_Z + s * (ROAD_W / 2 + 1.2)); w.userData.noCast = true; w.userData.label = 'sidewalk'; root.add(w);
   }
   // фонари вдоль дальней стороны
   const lampMat = new THREE.MeshBasicMaterial({ color: 0x2a2a2a });
@@ -213,6 +213,7 @@ function createLandscape(scene, renderer) {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 7.5, 6), poleMat); pole.position.set(x, 3.75, z);
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 2.4), poleMat); arm.position.set(x, 7.4, z - 1.1);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.9), lampMat); head.position.set(x, 7.3, z - 2.1);
+    pole.userData.label = arm.userData.label = head.userData.label = 'lamp';
     root.add(pole, arm, head);
   }
   // машина: боковой профиль выдавлен по ширине, окна — тёмная вставка чуть шире кузова
@@ -233,6 +234,7 @@ function createLandscape(scene, renderer) {
       const h = new THREE.Mesh(lightGeo, headMat); h.position.set(2.16, 0.62, sz); g.add(h);
       const t = new THREE.Mesh(lightGeo, tailMat); t.position.set(-2.16, 0.72, sz); g.add(t);
     }
+    g.userData.label = 'car';
     g.position.set(x, 0.03, z); g.rotation.y = dir > 0 ? 0 : Math.PI;
     g.scale.setScalar(0.96 + rng() * 0.1);
     return g;
@@ -251,7 +253,7 @@ function createLandscape(scene, renderer) {
     const len = Math.hypot(x2 - x1, z2 - z1);
     const m = new THREE.Mesh(new THREE.PlaneGeometry(len, w), mat);
     m.rotation.order = 'YXZ'; m.rotation.x = -Math.PI / 2; m.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
-    m.position.set((x1 + x2) / 2, y, (z1 + z2) / 2); m.userData.noCast = true;
+    m.position.set((x1 + x2) / 2, y, (z1 + z2) / 2); m.userData.noCast = true; m.userData.label = 'path';
     root.add(m);
   }
   const DOORS = [-15, -1, 13, 27], DOOR_Z = -72.4, WALK_Z = -67;
@@ -276,7 +278,7 @@ function createLandscape(scene, renderer) {
     const deck = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 3, 5, 10), towerWhite); deck.position.y = H * 0.62; t.add(deck);
     const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.4, 36, 6), towerRed); mast.position.y = H + 18; t.add(mast);
     const b = new THREE.Mesh(new THREE.SphereGeometry(1.1, 10, 8), beacon); b.position.y = H + 36; t.add(b);
-    t.position.set(430, 0, -45);
+    t.position.set(430, 0, -45); t.userData.label = 'tower';
     t.traverse(o => { o.userData.noCast = o.userData.noReceive = true; });
     root.add(t);
   })();
@@ -315,5 +317,5 @@ function createLandscape(scene, renderer) {
     o.castShadow = !o.userData.noCast;
     o.receiveShadow = !o.userData.noReceive;
   });
-  return { update };
+  return { update, root };
 }

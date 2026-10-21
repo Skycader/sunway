@@ -20,6 +20,7 @@ const Astro = (() => {
     const T = (jd - 2451545.0) / 36525;
     const L0 = mod(280.46646 + 36000.76983 * T + 0.0003032 * T * T, 360);
     const M = mod(357.52911 + 35999.05029 * T - 0.0001537 * T * T, 360) * D2R;
+    const e = 0.016708634 - 0.000042037 * T;
     const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(M) + (0.019993 - 0.000101 * T) * Math.sin(2 * M) + 0.000289 * Math.sin(3 * M);
     const trueLon = (L0 + C) * D2R;
     const omega = (125.04 - 1934.136 * T) * D2R;
@@ -30,7 +31,9 @@ const Astro = (() => {
     // J2000: убираем прецессию из долготы, широта Солнца ≈ 0
     const j = eclToEq(appLon - eclPrecession(jd), 0);
     const E = mod(L0 - 0.0057183 - raDate / D2R + 180, 360) - 180;              // уравнение времени, градусов
-    return { lon: appLon, raDate, decDate, ra: j.ra, dec: j.dec, eotMin: E * 4 };
+    // расстояние Земля — Солнце, а.е. (Meeus, гл. 25)
+    const distAU = 1.000001018 * (1 - e * e) / (1 + e * Math.cos(M + C * D2R));
+    return { lon: appLon, raDate, decDate, ra: j.ra, dec: j.dec, eotMin: E * 4, distAU };
   }
 
   // ---------- Луна ----------
