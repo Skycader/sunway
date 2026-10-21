@@ -198,3 +198,30 @@ function initYearMenu(ctx) {
   mark();
   return { refresh: mark };
 }
+
+// ---------- настройки во всплывающем окне у шестерёнки: открывается при наведении, клик закрепляет ----------
+function initSettingsPopover() {
+  const btn = document.getElementById('gearBtn'), pop = document.getElementById('settingsPop');
+  let pinned = false, timer = 0;
+  function place() {
+    const r = btn.getBoundingClientRect();
+    const w = Math.min(330, innerWidth - 16);
+    pop.style.width = w + 'px';
+    pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + 'px';
+    const h = pop.offsetHeight, below = innerHeight - r.bottom - 12, above = r.top - 12;
+    // под кнопкой, если там помещается, иначе над ней
+    if (below >= h || below >= above) { pop.style.top = r.bottom + 8 + 'px'; pop.style.bottom = 'auto'; pop.style.maxHeight = Math.max(140, below) + 'px'; }
+    else { pop.style.bottom = innerHeight - r.top + 8 + 'px'; pop.style.top = 'auto'; pop.style.maxHeight = Math.max(140, above) + 'px'; }
+  }
+  function open() { clearTimeout(timer); if (!pop.hidden) return; pop.hidden = false; place(); btn.setAttribute('aria-expanded', 'true'); }
+  function close() { clearTimeout(timer); pinned = false; pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+  const later = () => { clearTimeout(timer); if (!pinned) timer = setTimeout(close, 260); };
+  btn.addEventListener('mouseenter', open);
+  btn.addEventListener('mouseleave', later);
+  pop.addEventListener('mouseenter', () => clearTimeout(timer));
+  pop.addEventListener('mouseleave', later);
+  btn.addEventListener('click', e => { e.stopPropagation(); if (!pop.hidden && pinned) close(); else { open(); pinned = true; } });
+  document.addEventListener('pointerdown', e => { if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) close(); });
+  addEventListener('resize', () => { if (!pop.hidden) place(); });
+}

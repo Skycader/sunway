@@ -864,6 +864,7 @@
     if (obsMenu) obsMenu.select(observerSite);
   }
   placeObserver();
+  initSettingsPopover();
   const yearMenu = initYearMenu({ get: () => simYear, set: setYear });
   // «Сейчас»: настоящие год, дата и время суток (скорость и пауза остаются как были)
   $('nowBtn').addEventListener('click', () => {
