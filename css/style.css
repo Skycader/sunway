@@ -1,0 +1,213 @@
+/* Layout: полноэкранное небо глазами наблюдателя; слева часы, справа орбитальная мини-модель Земли; шкала скорости во всю ширину снизу */
+:root {
+  --ink: #eef2f8;
+  --ink-dim: #9fb0c8;
+  --glass: rgba(10, 16, 30, 0.46);
+  --glass-line: rgba(200, 220, 255, 0.16);
+  --sun: #ffc46b;
+  --mark: #d9c39c;
+  --track: rgba(200, 220, 255, 0.18);
+  --f-ui: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --f-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+/* выделять можно только значимые значения: координаты, время, высоту и азимут солнца, дату сезона */
+body { -webkit-user-select: none; user-select: none; }
+#obsCoord, #clock, #alt, #az, #doyLabel { -webkit-user-select: text; user-select: text; cursor: text; }
+body { background: #04070f; color: var(--ink); font-family: var(--f-ui); overflow: hidden; }
+canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+canvas#sky.drag { cursor: grabbing; }
+
+.hud {
+  position: fixed; left: 0; right: 0; top: 0;
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+  pointer-events: none;
+}
+body.compass-on .hud { padding-top: calc(14px + var(--compass-h) + env(safe-area-inset-top, 0px)); }
+:root { --compass-h: 46px; }
+canvas#compass {
+  position: fixed; left: 0; top: 0; width: 100%; display: block; pointer-events: none;
+  height: calc(var(--compass-h) + env(safe-area-inset-top, 0px));
+  background: linear-gradient(to bottom, rgba(5,9,20,.78), rgba(5,9,20,.45));
+  border-bottom: 1px solid var(--glass-line);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+canvas#compass[hidden] { display: none; }
+.todwrap { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+#clockPanel input.tod { height: 26px; }
+#clockPanel input.tod::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: var(--tg, #1a2440); }
+#clockPanel input.tod::-moz-range-track { height: 8px; border-radius: 4px; background: var(--tg, #1a2440); }
+#clockPanel input.tod::-moz-range-progress { background: transparent; }
+#clockPanel input.tod::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -5px; background: #f4f7fc; border: 2px solid #0b1222; box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
+#clockPanel input.tod::-moz-range-thumb { width: 14px; height: 14px; background: #f4f7fc; border: 2px solid #0b1222; box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
+.todticks { display: flex; justify-content: space-between; padding: 0 3px; font: 500 10px var(--f-num); color: var(--ink-dim); }
+button.wide { width: 100%; padding: 10px 12px; font-size: 14px; }
+.checklist { display: flex; flex-direction: column; gap: 7px; }
+
+.panel {
+  pointer-events: auto;
+  background: var(--glass); border: 1px solid var(--glass-line); border-radius: 14px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding: 12px 16px;
+}
+.clock { font-family: var(--f-num); font-size: clamp(30px, 6vw, 48px); font-weight: 500; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.date { margin-top: 6px; color: var(--ink-dim); font-size: 13px; }
+.date span { text-transform: capitalize; }
+.sunline { margin-top: 10px; display: flex; gap: 16px; font-family: var(--f-num); font-size: 13px; font-variant-numeric: tabular-nums; }
+.sunline b { color: var(--sun); font-weight: 500; }
+.lab { color: var(--ink-dim); font-family: var(--f-ui); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 2px; }
+
+.globe-panel { width: clamp(220px, 30vw, 340px); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.globe-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.globe-head .lab { margin: 0; }
+.globe-head small { color: var(--ink-dim); font-size: 11px; }
+canvas#globe { width: 100%; aspect-ratio: 4 / 3; max-width: 100%; display: block; border-radius: 10px; background: radial-gradient(ellipse at 70% 40%, #0d1630 0%, #03050c 75%); touch-action: none; cursor: grab; }
+.globe-wrap { position: relative; }
+.orbit {
+  /* вплотную в угол мини-карты: верхний правый угол повторяет её скругление 10px */
+  position: absolute; right: 0; top: 0; width: 42%; max-width: 150px; aspect-ratio: 1;
+  border-radius: 0 10px 0 14px;
+  background: radial-gradient(circle at 50% 50%, rgba(14,22,44,.98) 0%, rgba(4,7,15,.98) 75%);
+  border-left: 1px solid rgba(200,220,255,.22); border-bottom: 1px solid rgba(200,220,255,.22);
+  box-shadow: -6px 6px 20px rgba(0,0,0,.4);
+  opacity: 0; transform: scale(.9); transform-origin: top right;
+  transition: opacity .3s ease, transform .3s ease; pointer-events: none;
+}
+.orbit.show { opacity: 1; transform: none; }
+.orbit.show ~ .gsun { opacity: 0; }
+.gsun { transition: opacity .2s; }
+@media (prefers-reduced-motion: reduce) { .orbit { transition: none; } }
+.gsun {
+  position: absolute; left: 0; top: 0; pointer-events: none; display: flex; align-items: center; gap: 5px;
+  font: 600 11px var(--f-ui); color: var(--sun); letter-spacing: .04em; text-shadow: 0 1px 3px rgba(0,0,0,.8); will-change: transform;
+}
+.gsun[hidden] { display: none; }
+.gsun i { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 9px solid var(--sun); }
+canvas#globe.over-earth { cursor: crosshair; }
+canvas#globe.drag { cursor: grabbing; }
+.obs { font-family: var(--f-num); font-size: 13px; font-variant-numeric: tabular-nums; }
+.obs b { color: var(--sun); font-weight: 500; }
+
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button {
+  font: 600 13px var(--f-ui); color: #1a1205; background: var(--sun); border: 0; border-radius: 8px;
+  padding: 7px 12px; cursor: pointer;
+}
+button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--glass-line); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none; }
+.check input { width: 16px; height: 16px; margin: 0; accent-color: var(--sun); cursor: pointer; }
+.hint { color: var(--ink-dim); font-size: 12px; line-height: 1.4; }
+
+.speedbar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-top: 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: linear-gradient(to top, rgba(3,6,14,.75), rgba(3,6,14,0));
+}
+.speedhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.mult { font-family: var(--f-num); font-size: 28px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.mult small { font-size: 14px; color: var(--ink-dim); margin-left: 8px; }
+.zoomline { cursor: help; }
+.zoomline.danger { color: #ff7a66; font-weight: 500; }
+.daylen { color: var(--ink-dim); font-size: 13px; font-family: var(--f-num); white-space: pre-line; text-align: right; line-height: 1.5; }
+
+/* ползунок дня года: сезоны цветом (северное полушарие; для южного цвета меняются местами) */
+.season { display: flex; flex-direction: column; gap: 4px; }
+.season-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.season-head .lab { margin: 0; }
+.season-head span:last-child { font-family: var(--f-num); font-size: 12px; font-variant-numeric: tabular-nums; }
+.season { --win: #7fb0e6; --spr: #78c98a; --sum: #f0c24f; --aut: #e0884a; }
+.season.south { --win: #f0c24f; --sum: #7fb0e6; --spr: #e0884a; --aut: #78c98a; }
+.season { --g: linear-gradient(to right,
+  var(--win) 0 21.6%, var(--spr) 21.6% 47.1%, var(--sum) 47.1% 72.6%, var(--aut) 72.6% 97.3%, var(--win) 97.3% 100%); }
+.season input.doy { height: 24px; }
+.season input.doy::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--g); opacity: .9; }
+.season input.doy::-moz-range-track { height: 6px; border-radius: 3px; background: var(--g); }
+.season input.doy::-moz-range-progress { background: transparent; }
+.season input.doy::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -5px; background: #f4f7fc; border: 2px solid #0b1222; box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+.season input.doy::-moz-range-thumb { width: 12px; height: 12px; background: #f4f7fc; border: 2px solid #0b1222; box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+.months { position: relative; height: 14px; font: 500 10px var(--f-num); color: var(--ink-dim); }
+.months span { position: absolute; transform: translateX(-50%); }
+.season-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--ink-dim); }
+.season-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+
+input[type=range] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 34px; background: transparent; margin: 0; display: block;
+}
+input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--sun) var(--p, 0%), var(--track) var(--p, 0%)); }
+input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--track); }
+input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--sun); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: #fff6e2; border: 3px solid var(--sun); box-shadow: 0 0 18px rgba(255,190,90,.7); }
+input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #fff6e2; border: 3px solid var(--sun); box-shadow: 0 0 18px rgba(255,190,90,.7); }
+
+.ticks { position: relative; height: 16px; margin-top: 2px; font-family: var(--f-num); font-size: 11px; color: var(--ink-dim); }
+.ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+
+.cardinal[hidden], .sunptr[hidden] { display: none; }
+.cardinal { position: fixed; left: 0; top: 0; font: 800 13px var(--f-ui); color: rgba(240,245,255,.75); letter-spacing: .1em; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.6); will-change: transform; }
+.sunptr {
+  position: fixed; left: 0; top: 0; pointer-events: none;
+  display: flex; align-items: center; gap: 6px;
+  font: 500 12px var(--f-num); color: var(--mark); font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0,0,0,.7); will-change: transform;
+}
+.sunptr i {
+  width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+  border-left: 11px solid var(--mark); opacity: .85;
+}
+@media (max-width: 560px) {
+  .globe-panel { width: 100%; }
+  canvas#globe { aspect-ratio: 16 / 9; }
+}
+
+/* переключатель языка: скруглённый квадрат в правом верхнем углу мини-карты */
+.flag { font-family: "Twemoji Country Flags", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+.lang { position: absolute; right: 6px; top: 6px; z-index: 3; }
+.lang-btn {
+  width: 30px; height: 30px; padding: 0; display: grid; place-items: center; font-size: 17px; line-height: 1;
+  border-radius: 9px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); cursor: pointer;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.lang-btn:hover { border-color: rgba(200,220,255,.4); }
+.lang-menu {
+  position: absolute; right: 0; top: 34px; margin: 0; padding: 4px; list-style: none; min-width: 124px;
+  background: rgba(10,16,30,.92); border: 1px solid var(--glass-line); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.lang-menu li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; font-size: 13px; cursor: pointer; }
+.lang-menu li:hover { background: rgba(200,220,255,.12); }
+.lang-menu li[aria-selected="true"] { color: var(--sun); }
+/* орбитальная врезка уезжает под переключатель */
+.orbit { top: 42px; border-radius: 0 0 0 14px; border-top: 1px solid rgba(200,220,255,.22); }
+
+/* Пауза/Пуск: жёлтая, пока время идёт; на паузе — прозрачная */
+button#pause { border: 1px solid transparent; transition: background .2s, color .2s, border-color .2s; }
+button#pause.paused { background: rgba(200,220,255,.08); color: var(--ink-dim); border-color: var(--glass-line); }
+button#pause.paused:hover { background: rgba(200,220,255,.14); color: var(--ink); }
+
+/* время идёт: по жёлтой кнопке бежит мягкая волна из тёплых оттенков */
+button#pause:not(.paused) {
+  background: linear-gradient(100deg, #f0a93c 0%, #ffd27a 25%, #ffc46b 50%, #f5a640 75%, #f0a93c 100%);
+  background-size: 200% 100%;
+  animation: pause-wave 3.2s linear infinite;
+}
+@keyframes pause-wave { from { background-position: 0 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { button#pause:not(.paused) { animation: none; } }
+button#pause.paused { animation: none; }
+
+/* значок статуса: планета обращается вокруг центра, на паузе замирает */
+button#pause { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.orb { width: 22px; height: 22px; flex: none; fill: currentColor; }
+.orb-ring { fill: none; stroke: currentColor; stroke-width: 1.2; opacity: .55; }
+.orb-spin { transform-origin: 12px 12px; animation: orb-turn 2.4s linear infinite; }
+@keyframes orb-turn { to { transform: rotate(360deg); } }
+button#pause.paused .orb-spin { animation-play-state: paused; }
+button#pause.paused .orb { opacity: .6; }
+@media (prefers-reduced-motion: reduce) { .orb-spin { animation: none; } }

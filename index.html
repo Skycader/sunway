@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="icon" type="image/svg+xml" href="favicon.svg"><link rel="alternate icon" href="favicon.svg"></head><body>
+<title>Небосвод</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="vendor/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+
+<canvas id="sky"></canvas>
+<canvas id="compass" hidden></canvas>
+
+<div class="hud">
+  <div class="panel" id="clockPanel">
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="date"><span data-i="localTime">местное время</span> · <span id="zone">UTC</span></div>
+    <div class="sunline">
+      <span><span class="lab" data-i="sunAlt">Высота солнца</span><b id="alt">—</b></span>
+      <span><span class="lab" data-i="azimuth">Азимут</span><b id="az">—</b></span>
+    </div>
+    <div class="todwrap">
+      <label class="lab" for="tod" data-i="timeOfDay">Время суток</label>
+      <input type="range" id="tod" class="tod" min="0" max="1439" step="1" value="720">
+      <div class="todticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+    </div>
+  </div>
+  <div class="panel globe-panel" id="globePanel">
+    <div class="globe-head"><span class="lab" data-i="orbitView">Вид с орбиты</span></div>
+    <div class="globe-wrap"><canvas id="globe"></canvas><canvas id="orbit" class="orbit" aria-hidden="true"></canvas><div class="gsun" id="gsun" hidden><i></i><span data-i="sun">Солнце</span></div>
+      <div class="lang" id="lang">
+        <button type="button" class="lang-btn" id="langBtn" aria-haspopup="listbox" aria-expanded="false" data-i-aria="language"><span class="flag" id="langFlag">🇷🇺</span></button>
+        <ul class="lang-menu" id="langMenu" role="listbox" hidden>
+          <li role="option" data-lang="ru"><span class="flag">🇷🇺</span>Русский</li>
+          <li role="option" data-lang="en"><span class="flag">🇬🇧</span>English</li>
+        </ul>
+      </div></div>
+    <div class="obs"><span data-i="observer">Наблюдатель</span> <b id="obsCoord">—</b></div>
+    <div class="season" id="season">
+      <div class="season-head"><label class="lab" for="doy" data-i="dayOfYear">День года</label><span id="doyLabel">—</span></div>
+      <input type="range" id="doy" class="doy" min="0" max="364" step="1" value="0">
+      <div class="months" id="months"></div>
+      <div class="season-legend">
+        <span><i style="background:var(--win)"></i><span data-i="winter">зима</span></span><span><i style="background:var(--spr)"></i><span data-i="spring">весна</span></span><span><i style="background:var(--sum)"></i><span data-i="summer">лето</span></span><span><i style="background:var(--aut)"></i><span data-i="autumn">осень</span></span>
+      </div>
+    </div>
+    <button id="pause" class="wide"><svg class="orb" viewBox="0 0 24 24" aria-hidden="true"><circle class="orb-ring" cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6"/><g class="orb-spin"><circle class="orb-planet" cx="20.5" cy="12" r="2.4"/></g></svg><span id="pauseText" data-i="playing">Идёт время</span></button>
+    <div class="checklist">
+      <label class="check" for="always"><input type="checkbox" id="always"> <span data-i="always">Солнце всегда</span></label>
+      <label class="check" for="follow"><input type="checkbox" id="follow"> <span data-i="follow">Следовать за солнцем</span></label>
+      <label class="check" for="compassOn"><input type="checkbox" id="compassOn"> <span data-i="compass">Компас</span></label>
+      <label class="check" for="smooth"><input type="checkbox" id="smooth"> <span data-i="smooth">Плавное ускорение</span></label>
+    </div>
+    <div class="hint" data-i="hint">Клик по Земле переносит наблюдателя. Фон тяни, чтобы облететь планету.</div>
+  </div>
+</div>
+
+<div class="speedbar">
+  <div class="speedhead">
+    <div class="mult" id="mult">×1<small>реальное время</small></div>
+    <div class="daylen" id="daylen">сутки за 24 ч</div>
+  </div>
+  <input type="range" id="speed" min="0" max="1000" step="1" value="0" data-i-aria="speedLabel" aria-label="Скорость времени">
+  <div class="ticks" id="ticks"></div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/land-data.js"></script>
+<script src="js/app.js"></script>
+
+</body></html>
