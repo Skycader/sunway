@@ -22,7 +22,7 @@ function createLandscape(scene, renderer) {
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.4;
   const SHADOW_C = new THREE.Vector3(0, 0, -50);   // центр области теней: дом и деревья
   sun.target.position.copy(SHADOW_C);
-  scene.fog = new THREE.Fog(0x99b8d8, 250, 1500);
+  scene.fog = new THREE.Fog(0x99b8d8, 300, 2800);   // далеко, чтобы самолёт был виден на подлёте за 3 км
 
   const root = new THREE.Group();
   root.position.y = GROUND;
@@ -55,10 +55,10 @@ function createLandscape(scene, renderer) {
       c.fillStyle = rng() < 0.5 ? '#f2eee0' : '#f0d24a'; c.fillRect(x, y, 2, 2);
     }
     const t = new THREE.CanvasTexture(cv);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(220, 220); t.anisotropy = 16;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(366, 366); t.anisotropy = 16;
     return t;
   })();
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(3600, 3600), lambert(0xffffff, { map: grassTex }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), lambert(0xffffff, { map: grassTex }));
   ground.rotation.x = -Math.PI / 2;
   ground.userData.noCast = true; ground.userData.label = 'ground';
   root.add(ground);
@@ -69,7 +69,7 @@ function createLandscape(scene, renderer) {
 
   // ---------------- север: гора ----------------
   function makeMountain() {
-    const R = 400, H = 320, N = 28;
+    const R = 300, H = 260, N = 28;
     const prof = [];
     for (let i = 0; i <= N; i++) { const v = i / N; prof.push(new THREE.Vector2(R * Math.pow(1 - v, 1.35) + 0.001, H * v)); }
     const g = new THREE.LatheGeometry(prof, 80);
@@ -91,7 +91,7 @@ function createLandscape(scene, renderer) {
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, lambert(0xffffff, { vertexColors: true }));
-    m.position.set(0, -4, 770);
+    m.position.set(0, -4, 800);
     m.userData.noCast = m.userData.noReceive = true; m.userData.label = 'mountain';
     return m;
   }
@@ -183,7 +183,7 @@ function createLandscape(scene, renderer) {
     .forEach(([x, z, k, h]) => root.add(tree(k, x, z, h)));
 
   // ---------------- восток: дорога с машинами ----------------
-  const ROAD_Z = 6.5, ROAD_W = 9, ROAD_LEN = 3400;
+  const ROAD_Z = 6.5, ROAD_W = 9, ROAD_LEN = 6000;
   function roadTexture() {
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
     const c = cv.getContext('2d');
@@ -283,6 +283,9 @@ function createLandscape(scene, renderer) {
     root.add(t);
   })();
 
+  // ---------------- аэропорт перед горой ----------------
+  const airport = createAirport({ root, lambert, rng });
+
   // ---------------- освещение по Солнцу ----------------
   const S = THREE.MathUtils.smoothstep, mix = (a, b, t) => a + (b - a) * t;
   let seeThrough = false;
@@ -306,6 +309,7 @@ function createLandscape(scene, renderer) {
     hemi.color.setRGB(mix(0.10, 0.65, day) + twi * 0.22, mix(0.13, 0.78, day) + twi * 0.08, mix(0.25, 0.95, day));
     hemi.groundColor.setRGB(mix(0.03, 0.30, day), mix(0.03, 0.32, day), mix(0.04, 0.22, day));
     const night = 1 - day;
+    airport.update(night, time);
     for (const { m, k } of mats) {
       if (k === 'windows') m.emissiveIntensity = night * 1.1;
       else if (k === 'lamp') m.color.setRGB(mix(0.16, 1.0, night), mix(0.16, 0.82, night), mix(0.16, 0.45, night));
@@ -317,5 +321,5 @@ function createLandscape(scene, renderer) {
     o.castShadow = !o.userData.noCast;
     o.receiveShadow = !o.userData.noReceive;
   });
-  return { update, root };
+  return { update, root, tick: dt => airport.tick(dt), airport };
 }

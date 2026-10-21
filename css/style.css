@@ -546,3 +546,13 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
 .m-text span { margin-top: 2px; font: 700 12.5px var(--f-ui); color: var(--sun); letter-spacing: .02em; }
 .m-text small { margin-top: 3px; font: 400 11.5px/1.4 var(--f-ui); color: var(--ink-dim); }
 .m-text small[hidden] { display: none; }
+
+/* кнопка действия в карточке указки («Следить за самолётом») */
+.m-card.has-act { pointer-events: auto; }
+.m-act {
+  margin-top: 8px; padding: 6px 12px; border: 1px solid rgba(255,196,107,.6); border-radius: 9px; cursor: pointer; align-self: flex-start;
+  background: rgba(255,196,107,.16); color: #ffe1ad; font: 700 12px var(--f-ui); letter-spacing: .02em; transition: background .18s, border-color .18s;
+}
+.m-act:hover { background: rgba(255,196,107,.3); border-color: rgba(255,214,150,.9); }
+.m-act[aria-pressed="true"] { background: linear-gradient(180deg, #f9bd5c, #e8901f); color: #fff; text-shadow: 0 1px 2px rgba(120,60,0,.55); border-color: transparent; }
+.m-act[hidden] { display: none; }

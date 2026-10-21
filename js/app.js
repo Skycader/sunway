@@ -221,11 +221,11 @@
   tilt.add(spin);
   scene.add(tilt);
   const landscape = createLandscape(scene, renderer);
-
+  
   // ---------- подписи звёзд: кольцо, от него наклонная линия и название на полке ----------
   const labels = $('labels'), lctx = labels.getContext('2d'), starLabelsOn = $('starLabels');
   const starPos = new THREE.Vector3();
-  let markStar = -1, markUntil = 0, focusing = false, focusMoon = false;   // выбранная в поиске звезда и плавный наведение камеры
+  let markStar = -1, markUntil = 0, focusing = false, focusMoon = false, trackPlane = false;   // выбранная в поиске звезда и плавный наведение камеры
   const LBL = { ring: 6, diag: 14, lift: 3 };
   function drawStarLabels(night) {
     const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight;
@@ -568,7 +568,7 @@
       if (e.button !== 0) return;
       if (follow.checked) { follow.checked = false; saveFlag('follow', false); }
       drag = { x: e.clientX, y: e.clientY, yaw, pitch };
-      focusing = false; setMoonFocus(false);
+      focusing = false; setMoonFocus(false); setPlaneTrack(false);
       el.setPointerCapture(e.pointerId); el.classList.add('drag');
     });
     el.addEventListener('pointermove', e => {
@@ -606,7 +606,7 @@
   const always = $('always'), compassOn = $('compassOn');
   // «Следовать за Солнцем» — кнопка; объект с полем checked нужен остальному коду, как у галочки раньше
   const followBtn = $('followBtn'), followOff = $('followOff');
-  const updateFree = () => followOff.setAttribute('aria-pressed', String(!follow.v && !focusMoon));   // «Свободно» горит, когда не следим ни за чем
+  const updateFree = () => followOff.setAttribute('aria-pressed', String(!follow.v && !focusMoon && !trackPlane));   // «Свободно» горит, когда не следим ни за чем
   const follow = { v: false, get checked() { return this.v; }, set checked(x) { this.v = !!x; followBtn.setAttribute('aria-pressed', String(this.v)); updateFree(); } };
   always.checked = loadFlag('always', false);
   follow.checked = loadFlag('follow', false);
@@ -620,17 +620,18 @@
   // «Следовать»: камера сама поворачивается к Луне и сопровождает её (зум не трогаем), пока не потянешь небо или не нажмёшь снова
   function setMoonFocus(on) {
     focusMoon = on;
+    if (on) trackPlane = false;
     moonFocusBtn.setAttribute('aria-pressed', String(on)); updateFree();
     if (on) { focusing = false; markStar = -1; if (follow.checked) { follow.checked = false; saveFlag('follow', false); } }
   }
   moonFocusBtn.addEventListener('click', () => setMoonFocus(!focusMoon));
-  followOff.addEventListener('click', () => { follow.checked = false; saveFlag('follow', false); setMoonFocus(false); });
+  followOff.addEventListener('click', () => { follow.checked = false; saveFlag('follow', false); setMoonFocus(false); setPlaneTrack(false); });
   const smooth = $('smooth');
   smooth.checked = loadFlag('smooth', true);
   smooth.addEventListener('change', () => saveFlag('smooth', smooth.checked));
   always.addEventListener('change', () => saveFlag('always', always.checked));
   // слежение за Солнцем и за Луной исключают друг друга
-  followBtn.addEventListener('click', () => { follow.checked = !follow.checked; saveFlag('follow', follow.checked); if (follow.checked) setMoonFocus(false); });
+  followBtn.addEventListener('click', () => { follow.checked = !follow.checked; saveFlag('follow', follow.checked); if (follow.checked) { setMoonFocus(false); setPlaneTrack(false); } });
   compassOn.addEventListener('change', () => { saveFlag('compass', compassOn.checked); applyCompass(); });
 
   // ---------- компас (пеленг по горизонтали взгляда) ----------
@@ -1130,7 +1131,7 @@
   }
 
   // ---------- лазерная указка: ПКМ сразу показывает расстояние до того, на что указали ----------
-  const mDot = $('mDot'), mCard = $('mCard'), mDist = $('mDist'), mName = $('mName'), mExtra = $('mExtra');
+  const mAct = $('mAct'), mDot = $('mDot'), mCard = $('mCard'), mDist = $('mDist'), mName = $('mName'), mExtra = $('mExtra');
   const mRay = new THREE.Raycaster(), mNdc = new THREE.Vector2(), mV = new THREE.Vector3();
   const sunWorld = new THREE.Vector3(); let lastJD = 0;
   let measure = null;                                   // { world(out) — где сейчас цель в мире }
@@ -1145,6 +1146,12 @@
     return grp(km / 1e12) + ' ' + t('trlKm');
   }
   const LY_KM = 9.4607e12;
+  const planeExtra = p => grp(p.speed * 3.6) + ' ' + t('kmh') + ' · ' + t('mAlt') + ' ' + grp(p.alt) + ' ' + t('mUnit') + (t('mPhases')[p.phase] ? ' · ' + t('mPhases')[p.phase] : '');
+  function setPlaneTrack(on) {
+    trackPlane = on;
+    if (on) { focusing = false; markStar = -1; if (focusMoon) setMoonFocus(false); if (follow.checked) { follow.checked = false; saveFlag('follow', false); } }
+    updateFree();
+  }
   // «233 года», «1 год», «5 лет»
   const yearsWord = n => I18N.lang !== 'ru' ? t('mYears') : (n % 10 === 1 && n % 100 !== 11 ? 'год' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года' : 'лет');
 
@@ -1154,6 +1161,14 @@
     const dir = mRay.ray.direction;
     // 1) ландшафт: ближайшее пересечение луча, расстояние в метрах
     const hit = mRay.intersectObject(landscape.root, true)[0];
+    const pi = landscape.airport.info();
+    if (pi.visible) {                                    // самолёт: мелкая цель, поэтому по угловой близости; ближе любой преграды
+      const d = pi.pos.length(), a = Math.acos(Math.min(1, dir.dot(mV.copy(pi.pos).normalize())));
+      if (a < Math.max(camera.fov * DEG / innerHeight * 18, Math.atan(26 / d)) && (!hit || hit.distance > d)) {
+        const live = () => { const p = landscape.airport.info(); return { dist: fmtMeters(p.pos.length()), extra: planeExtra(p) }; };
+        return { name: t('mObjects').plane, ...live(), live, world: out => out.copy(landscape.airport.info().pos), action: { run: () => setPlaneTrack(!trackPlane) } };
+      }
+    }
     if (hit) {
       let o = hit.object; while (o && !o.userData.label) o = o.parent;
       const key = (o && o.userData.label) || 'ground', point = hit.point.clone();
@@ -1189,11 +1204,22 @@
     measure = res;
     mDist.textContent = res.dist; mName.textContent = res.name; mExtra.textContent = res.extra; mExtra.hidden = !res.extra;
     mDot.hidden = mCard.hidden = false;
+    mAct.hidden = !res.action;
+    mCard.classList.toggle('has-act', !!res.action);
   }
   function hideMeasure() { measure = null; mDot.hidden = mCard.hidden = true; }
   // цель следует за точкой в мире: небо вращается, камера двигается — красная точка и карточка едут вместе
   function updateMeasure() {
     if (!measure) return;
+    if (measure.live) {                                  // самолёт летит: расстояние и скорость обновляем на лету
+      if (!landscape.airport.info().visible) { hideMeasure(); return; }
+      const v = measure.live();
+      if (mDist.textContent !== v.dist) mDist.textContent = v.dist;
+      if (mExtra.textContent !== v.extra) mExtra.textContent = v.extra;
+      const lbl = t(trackPlane ? 'mRelease' : 'mTrack');
+      if (mAct.textContent !== lbl) mAct.textContent = lbl;
+      mAct.setAttribute('aria-pressed', String(trackPlane));
+    }
     measure.world(mV).project(camera);
     if (mV.z >= 1 || Math.abs(mV.x) > 1.05 || Math.abs(mV.y) > 1.05) { mDot.style.visibility = mCard.style.visibility = 'hidden'; return; }
     const x = (mV.x + 1) / 2 * innerWidth, y = (1 - mV.y) / 2 * innerHeight;
@@ -1204,7 +1230,8 @@
     mCard.style.transform = `translate(${Math.max(8, cx)}px, ${Math.max(8, cy)}px)`;
   }
   canvas.addEventListener('contextmenu', e => { e.preventDefault(); showMeasure(pickTarget(e.clientX, e.clientY)); });
-  document.addEventListener('pointerdown', e => { if (e.button === 0) hideMeasure(); });
+  mAct.addEventListener('click', () => { if (measure && measure.action) measure.action.run(); });
+  document.addEventListener('pointerdown', e => { if (e.button === 0 && !mCard.contains(e.target)) hideMeasure(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMeasure(); });
 
   let hudTick = 0;
@@ -1241,7 +1268,19 @@
     tilt.updateMatrixWorld(true);
     const dayK = THREE.MathUtils.smoothstep(s.dir.y, -0.12, 0.25);
     const mo = updateMoon(sol, dayK);
+    if (!paused) landscape.tick(dt);
     landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0, mo);
+    if (trackPlane && !drag) {
+      const pi = landscape.airport.info();
+      if (!pi.visible) setPlaneTrack(false);
+      else {
+        const p = pi.pos, len = p.length();
+        const ty = Math.PI - Math.atan2(-p.x, p.z), tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, p.y / len)))));
+        const k = 1 - Math.exp(-dt * 6);
+        let dy = ty - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        yaw += dy * k; pitch += (tp - pitch) * k;
+      }
+    }
     if (focusMoon && !drag && moonState.on) {
       const ty = Math.PI - Math.atan2(-mo.dir.x, mo.dir.z), tp = Math.max(-1.4, Math.min(1.5, Math.asin(Math.max(-1, Math.min(1, mo.dir.y)))));
       const k = 1 - Math.exp(-dt * 5);
