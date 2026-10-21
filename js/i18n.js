@@ -13,7 +13,13 @@ const I18N = (() => {
       searchStars: 'Искать звёзды', searchPlaceholder: 'Название звезды или созвездия…', pickObservatory: 'Выбрать обсерваторию', close: 'Закрыть',
       colStar: 'Звезда', colStatus: 'Видна', colPos: 'Положение', colMag: 'Блеск, m', colLum: 'Светимость, L☉', colDist: 'Расстояние', colCon: 'Созвездие · класс',
       visibleNow: 'Сейчас видна на небе', tooBright: 'Над горизонтом, но небо слишком светлое', belowHorizon: 'Под горизонтом',
-      now: 'Сейчас', nowTip: 'Выставить настоящие дату и время', declTip: 'δ — склонение Солнца: на сколько градусов Солнце севернее (+) или южнее (−) небесного экватора. Это и есть смена сезонов: от −23,4° в день зимнего солнцестояния до +23,4° летом. При δ = 0° (равноденствие) Солнце в полдень стоит в зените на экваторе.', settings: 'Настройки', showMoon: 'Показывать Луну', focus: 'Следовать', moonLabel: 'Луна', focusMoonTip: 'Следовать за Луной: камера наводится на неё и держит в центре', pickYear: 'Выбрать год',
+      now: 'Сейчас', nowTip: 'Выставить настоящие дату и время', declTip: 'δ — склонение Солнца: на сколько градусов Солнце севернее (+) или южнее (−) небесного экватора. Это и есть смена сезонов: от −23,4° в день зимнего солнцестояния до +23,4° летом. При δ = 0° (равноденствие) Солнце в полдень стоит в зените на экваторе.', settings: 'Настройки', tipAlways: 'Если Солнце ушло за горизонт, на небе остаётся бледная метка — кольцо с точкой в том месте, где оно сейчас. Так видно, с какой стороны и насколько глубоко оно под землёй, и где появится утром.',
+      tipMoon: 'Показывает Луну на небе и на мини-карте. Её свет ложится на землю, а яркая Луна приглушает звёзды и Млечный Путь. Значок рядом — фаза и освещённая доля диска.',
+      tipLabels: 'Подписывает яркие звёзды названиями. Подписи появляются ночью при приближении: чем сильнее зум (колесо мыши), тем больше звёзд подписано.',
+      tipSearch: 'Список подписанных звёзд с поиском. Нажми на строку — камера плавно наведётся на звезду.',
+      tipCompass: 'Лента с направлением взгляда в верхней части экрана: стороны света и градусы. Её можно тянуть мышкой — обзор вращается быстрее, чем при перетаскивании неба.',
+      tipSmooth: 'Время разгоняется и тормозит плавно, а не рывком, когда двигаешь ползунок скорости.',
+      showMoon: 'Показывать Луну', focus: 'Следовать', moonLabel: 'Луна', focusMoonTip: 'Следовать за Луной: камера наводится на неё и держит в центре', pickYear: 'Выбрать год',
       moonPhases: { new: 'Новолуние', wc: 'Растущий серп', fq: 'Первая четверть', wg: 'Растущая Луна', full: 'Полнолуние', lg: 'Убывающая Луна', lq: 'Последняя четверть', lc: 'Убывающий серп' },
       copyCoords: 'Скопировать координаты', openMaps: 'Открыть в Google Картах', copied: 'Скопировано ✓',
       alt: 'выс.', az: 'аз.', nothingFound: 'Ничего не найдено', lyUnit: 'св. лет',
@@ -50,7 +56,13 @@ const I18N = (() => {
       searchStars: 'Search stars', searchPlaceholder: 'Star or constellation name…', pickObservatory: 'Choose an observatory', close: 'Close',
       colStar: 'Star', colStatus: 'Seen', colPos: 'Position', colMag: 'Mag', colLum: 'Luminosity, L☉', colDist: 'Distance', colCon: 'Constellation · class',
       visibleNow: 'Visible in the sky now', tooBright: 'Above the horizon, but the sky is too bright', belowHorizon: 'Below the horizon',
-      now: 'Now', nowTip: 'Set the real date and time', declTip: 'δ is the Sun’s declination: how many degrees the Sun is north (+) or south (−) of the celestial equator. It drives the seasons: from −23.4° at the winter solstice to +23.4° in summer. At δ = 0° (equinox) the Sun is at the zenith over the equator at noon.', settings: 'Settings', showMoon: 'Show the Moon', focus: 'Follow', moonLabel: 'Moon', focusMoonTip: 'Follow the Moon: the camera aims at it and keeps it centered', pickYear: 'Choose a year',
+      now: 'Now', nowTip: 'Set the real date and time', declTip: 'δ is the Sun’s declination: how many degrees the Sun is north (+) or south (−) of the celestial equator. It drives the seasons: from −23.4° at the winter solstice to +23.4° in summer. At δ = 0° (equinox) the Sun is at the zenith over the equator at noon.', settings: 'Settings', tipAlways: 'When the Sun is below the horizon, a faint marker stays in the sky: a ring with a dot where it is right now. It shows which way and how deep it is under the ground, and where it will rise.',
+      tipMoon: 'Shows the Moon in the sky and on the mini-map. Its light falls on the ground, and a bright Moon dims the stars and the Milky Way. The icon next to it is the phase and the lit fraction.',
+      tipLabels: 'Labels bright stars with their names. Labels appear at night as you zoom in: the stronger the zoom (mouse wheel), the more stars are named.',
+      tipSearch: 'A searchable list of named stars. Click a row and the camera smoothly turns to that star.',
+      tipCompass: 'The strip at the top shows where you are looking: cardinal points and degrees. Drag it with the mouse to look around faster than dragging the sky.',
+      tipSmooth: 'Time speeds up and slows down gradually instead of jumping when you move the speed slider.',
+      showMoon: 'Show the Moon', focus: 'Follow', moonLabel: 'Moon', focusMoonTip: 'Follow the Moon: the camera aims at it and keeps it centered', pickYear: 'Choose a year',
       moonPhases: { new: 'New Moon', wc: 'Waxing crescent', fq: 'First quarter', wg: 'Waxing gibbous', full: 'Full Moon', lg: 'Waning gibbous', lq: 'Last quarter', lc: 'Waning crescent' },
       copyCoords: 'Copy coordinates', openMaps: 'Open in Google Maps', copied: 'Copied ✓',
       alt: 'alt', az: 'az', nothingFound: 'Nothing found', lyUnit: 'ly',
@@ -99,8 +111,9 @@ const I18N = (() => {
       document.querySelectorAll('[data-i-ph]').forEach(el => { el.placeholder = d[el.dataset.iPh]; });
       document.querySelectorAll('[data-i-aria]').forEach(el => {
         const v = d[el.dataset.iAria];
-        el.setAttribute('aria-label', v); if (el.tagName === 'BUTTON') el.title = v;
+        el.setAttribute('aria-label', v); if (el.tagName === 'BUTTON' && !el.dataset.iTip) el.title = v;
       });
+      document.querySelectorAll('[data-i-tip]').forEach(el => { el.dataset.tip = d[el.dataset.iTip]; });
       const flag = document.getElementById('langFlag'); if (flag) flag.textContent = FLAG[lang];
       document.querySelectorAll('#langMenu li').forEach(li => li.setAttribute('aria-selected', li.dataset.lang === lang));
     },

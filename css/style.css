@@ -434,3 +434,25 @@ button#pause:not(.paused) .orb { filter: drop-shadow(0 1px 1px rgba(120,60,0,.55
 .settings-pop[hidden] { display: none; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .settings-pop { animation: none; } .gear-ico { transition: none; } }
+
+/* врезка «Земля сверху» при смене сезона: плавающая карточка с полностью скруглёнными углами, а не приклеенный к стенке огрызок */
+.orbit {
+  right: 10px; top: 46px; width: 42%; max-width: 150px;
+  border-radius: 14px; border: 1px solid rgba(200,220,255,.28);
+  box-shadow: 0 8px 24px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+  background: radial-gradient(circle at 50% 50%, rgba(18,28,54,.96) 0%, rgba(6,10,20,.96) 78%);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+
+/* ---------- общие подсказки (стекло) ---------- */
+.decl::after { display: none !important; }
+.tip {
+  position: fixed; z-index: 90; max-width: 270px; padding: 9px 12px; pointer-events: none;
+  font: 400 12.5px/1.45 var(--f-ui); color: var(--ink); border-radius: 11px;
+  background: rgba(10,16,30,.96); border: 1px solid var(--glass-line); box-shadow: 0 10px 28px rgba(0,0,0,.5);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  animation: tip-in .14s ease-out;
+}
+.tip[hidden] { display: none; }
+@keyframes tip-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.check[data-tip] { cursor: pointer; }

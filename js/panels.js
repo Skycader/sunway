@@ -225,3 +225,34 @@ function initSettingsPopover() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) close(); });
   addEventListener('resize', () => { if (!pop.hidden) place(); });
 }
+
+// ---------- подсказки: один стеклянный пузырь для всего, что имеет data-tip ----------
+function initTips() {
+  const tip = document.createElement('div');
+  tip.className = 'tip'; tip.hidden = true; tip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tip);
+  let timer = 0, cur = null;
+  function show(el) {
+    const text = el.dataset.tip; if (!text) return;
+    cur = el; tip.textContent = text; tip.hidden = false;
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+    // над элементом, а если не помещается — под ним
+    tip.style.top = (r.top - h - 10 >= 8 ? r.top - h - 10 : Math.min(innerHeight - h - 8, r.bottom + 10)) + 'px';
+  }
+  const hide = () => { clearTimeout(timer); cur = null; tip.hidden = true; };
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (!el || el === cur) return;
+    clearTimeout(timer); tip.hidden = true;
+    timer = setTimeout(() => show(el), 320);
+  });
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (el && !el.contains(e.relatedTarget)) hide();
+  });
+  document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) show(el); });
+  document.addEventListener('focusout', hide);
+  document.addEventListener('pointerdown', hide);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+}
