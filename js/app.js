@@ -1207,7 +1207,16 @@
       paintTodTrack(sol);
       updDaylen();
       syncDoy();
-      $('moonInfo').textContent = moonState.on ? t('moonPhases')[MoonKit.phaseKey(moonState.illum, moonState.waxing)] + ' · ' + Math.round(moonState.illum * 100) + '%' : '';
+      // фаза одним взглядом: значок с освещённой частью и процент; название фазы — в подсказке
+      const mi = $('moonInfo');
+      mi.hidden = !moonState.on;
+      if (moonState.on) {
+        const k = moonState.illum, pct = Math.round(k * 100), rx = Math.abs(1 - 2 * k) * 7;
+        $('moonLit').setAttribute('d', `M8 1A7 7 0 0 1 8 15A${rx.toFixed(2)} 7 0 0 ${k < 0.5 ? 0 : 1} 8 1Z`);
+        $('moonLit').setAttribute('transform', moonState.waxing ? '' : 'translate(16 0) scale(-1 1)');
+        $('moonPct').textContent = pct + '%';
+        mi.title = t('moonPhases')[MoonKit.phaseKey(k, moonState.waxing)] + ' · ' + pct + '%';
+      }
       $('zone').textContent = 'UTC' + (zone >= 0 ? '+' : '−') + Math.abs(zone);
       let az = Math.atan2(-s.dir.x, s.dir.z) / DEG; if (az < 0) az += 360;
       $('alt').textContent = alt.toFixed(1) + '°';
