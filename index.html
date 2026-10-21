@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="css/style.css">
 
 <canvas id="sky"></canvas>
+<canvas id="labels"></canvas>
 <canvas id="compass" hidden></canvas>
 
 <div class="hud">
@@ -45,6 +46,7 @@
       <label class="check" for="always"><input type="checkbox" id="always"> <span data-i="always">Солнце всегда</span></label>
       <label class="check" for="follow"><input type="checkbox" id="follow"> <span data-i="follow">Следовать за солнцем</span></label>
       <label class="check" for="compassOn"><input type="checkbox" id="compassOn"> <span data-i="compass">Компас</span></label>
+      <label class="check" for="starLabels"><input type="checkbox" id="starLabels"> <span data-i="starLabels">Подписывать звёзды</span></label>
       <label class="check" for="smooth"><input type="checkbox" id="smooth"> <span data-i="smooth">Плавное ускорение</span></label>
     </div>
     <div class="hint" data-i="hint">Клик по Земле переносит наблюдателя. Фон тяни, чтобы облететь планету.</div>
@@ -63,6 +65,7 @@
 <script src="vendor/three.min.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/land-data.js"></script>
+<script src="js/stars-data.js"></script>
 <script src="js/landscape.js"></script>
 <script src="js/app.js"></script>
 

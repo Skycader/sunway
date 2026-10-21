@@ -212,3 +212,6 @@ button#pause { display: flex; align-items: center; justify-content: center; gap:
 button#pause.paused .orb-spin { animation-play-state: paused; }
 button#pause.paused .orb { opacity: .6; }
 @media (prefers-reduced-motion: reduce) { .orb-spin { animation: none; } }
+
+/* подписи звёзд поверх неба, под панелями */
+canvas#labels { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; pointer-events: none; }

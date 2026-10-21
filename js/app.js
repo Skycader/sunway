@@ -88,43 +88,58 @@
   skyDome.renderOrder = -1;   // небо первым: ландшафт с буфером глубины рисуется поверх
   scene.add(skyDome);
 
-  // звёзды на небесной сфере
-  const N = 2600, R = 900;
-  const pos = new Float32Array(N * 3), size = new Float32Array(N), bri = new Float32Array(N);
+  // звёзды: настоящий каталог (js/stars-data.js, HYG, эпоха J2000)
+  const R = 900;
+  const N = STAR_COUNT;
+  const raw = Uint8Array.from(atob(STAR_B64), c => c.charCodeAt(0));
+  const dv = new DataView(raw.buffer);
+  const pos = new Float32Array(N * 3), size = new Float32Array(N), bri = new Float32Array(N), tint = new Float32Array(N * 3), starMag = new Float32Array(N);
+  // показатель цвета B−V → RGB: от голубых (−0,3) через белые и жёлтые к красным (1,8)
+  const BV_STOPS = [[-0.3, 0.62, 0.72, 1.0], [0.0, 0.80, 0.86, 1.0], [0.3, 0.96, 0.96, 1.0], [0.6, 1.0, 0.95, 0.84], [1.0, 1.0, 0.82, 0.62], [1.4, 1.0, 0.68, 0.45], [1.8, 1.0, 0.55, 0.35]];
+  function bvColor(bv, out, o) {
+    bv = Math.max(BV_STOPS[0][0], Math.min(BV_STOPS[BV_STOPS.length - 1][0], bv));
+    let i = 0; while (i < BV_STOPS.length - 2 && bv > BV_STOPS[i + 1][0]) i++;
+    const A = BV_STOPS[i], B = BV_STOPS[i + 1], f = (bv - A[0]) / (B[0] - A[0]);
+    out[o] = A[1] + (B[1] - A[1]) * f; out[o + 1] = A[2] + (B[2] - A[2]) * f; out[o + 2] = A[3] + (B[3] - A[3]) * f;
+  }
   for (let i = 0; i < N; i++) {
-    const ra = Math.random() * Math.PI * 2;
-    const dec = Math.asin(Math.random() * 2 - 1);
+    const ra = dv.getUint16(i * 6, true) / 65536 * Math.PI * 2;
+    const dec = dv.getInt16(i * 6 + 2, true) / 32767 * Math.PI / 2;
+    const mag = raw[i * 6 + 4] / 20 - 2, bv = dv.getInt8(i * 6 + 5) / 40;
     pos[i*3]   = -Math.cos(dec) * Math.sin(ra) * R;
     pos[i*3+1] =  Math.sin(dec) * R;
     pos[i*3+2] = -Math.cos(dec) * Math.cos(ra) * R;
-    const m = Math.pow(Math.random(), 4);
-    size[i] = 1.2 + m * 3.2;
-    bri[i] = 0.25 + m * 0.75;
+    const t = Math.max(0, Math.min(1, (6.5 - mag) / 8));
+    size[i] = 1.3 + 3.8 * Math.pow(t, 1.5);
+    bri[i] = 0.3 + 0.7 * Math.pow(t, 0.7);
+    starMag[i] = mag;
+    bvColor(bv, tint, i * 3);
   }
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   starGeo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
   starGeo.setAttribute('aBri', new THREE.BufferAttribute(bri, 1));
+  starGeo.setAttribute('aColor', new THREE.BufferAttribute(tint, 3));
   const starMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     uniforms: { uNight: { value: 0 }, uPR: { value: renderer.getPixelRatio() } },
     vertexShader: `
-      attribute float aSize; attribute float aBri;
-      varying float vB; varying float vY;
+      attribute float aSize; attribute float aBri; attribute vec3 aColor;
+      varying float vB; varying float vY; varying vec3 vC;
       uniform float uPR;
       void main(){
         vec4 wp = modelMatrix * vec4(position, 1.0);
-        vY = normalize(wp.xyz).y; vB = aBri;
+        vY = normalize(wp.xyz).y; vB = aBri; vC = aColor;
         gl_PointSize = aSize * uPR;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: `
-      uniform float uNight; varying float vB; varying float vY;
+      uniform float uNight; varying float vB; varying float vY; varying vec3 vC;
       void main(){
         if (vY < 0.0) discard;
         float r = length(gl_PointCoord - 0.5);
         float a = smoothstep(0.5, 0.0, r) * vB * uNight * smoothstep(0.0, 0.06, vY);
-        gl_FragColor = vec4(vec3(0.92, 0.95, 1.0), a);
+        gl_FragColor = vec4(vC, a);
       }`
   });
   const tilt = new THREE.Group();
@@ -133,6 +148,55 @@
   tilt.add(spin);
   scene.add(tilt);
   const landscape = createLandscape(scene, renderer);
+
+  // ---------- подписи звёзд: кольцо, от него наклонная линия и название на полке ----------
+  const labels = $('labels'), lctx = labels.getContext('2d'), starLabelsOn = $('starLabels');
+  const starPos = new THREE.Vector3();
+  const LBL = { ring: 6, diag: 14, lift: 3 };
+  function drawStarLabels(night) {
+    const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight;
+    if (labels.width !== Math.round(W * dpr) || labels.height !== Math.round(H * dpr)) { labels.width = Math.round(W * dpr); labels.height = Math.round(H * dpr); }
+    const c = lctx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    if (!starLabelsOn.checked) return;
+    const fade = THREE.MathUtils.smoothstep(zoom, 1.25, 1.7) * THREE.MathUtils.smoothstep(night, 0.35, 0.9);
+    if (fade <= 0.01) return;
+    // чем сильнее зум, тем более тусклые звёзды подписываем
+    const maxMag = 0.3 + 2.2 * Math.log2(zoom / 1.25);
+    const idx = I18N.lang === 'ru' ? 2 : 1;
+    c.font = '600 12px Manrope, system-ui, sans-serif';
+    c.textBaseline = 'alphabetic';
+    const placed = [];
+    const hit = (x0, y0, x1, y1) => placed.some(r => x0 < r[2] && x1 > r[0] && y0 < r[3] && y1 > r[1]);
+    for (const n of STAR_NAMES) {
+      const i = n[0];
+      if (starMag[i] > maxMag) break;                     // имена отсортированы по яркости
+      starPos.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld);
+      if (starPos.y < R * 0.03) continue;                 // ниже горизонта и в дымке у самой земли
+      starPos.project(camera);
+      if (starPos.z >= 1 || Math.abs(starPos.x) > 1 || Math.abs(starPos.y) > 1) continue;
+      const sx = (starPos.x + 1) / 2 * W, sy = (1 - starPos.y) / 2 * H;
+      const text = n[idx], tw = c.measureText(text).width;
+      // пробуем четыре положения: вниз-вправо, вверх-вправо, вниз-влево, вверх-влево
+      for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const p1x = sx + dx * (LBL.ring * 0.7 + LBL.diag), p1y = sy + dy * (LBL.ring * 0.7 + LBL.diag);
+        const p2x = p1x + dx * (tw + 10);
+        const x0 = Math.min(p1x, p2x), x1 = Math.max(p1x, p2x), y0 = p1y - 16, y1 = p1y + 3;
+        if (x0 < 4 || x1 > W - 4 || y0 < 4 || y1 > H - 4 || hit(x0, y0, x1, y1)) continue;
+        placed.push([x0 - 4, y0 - 2, x1 + 4, y1 + 2]);
+        c.globalAlpha = fade;
+        c.strokeStyle = 'rgba(170,198,236,.7)'; c.lineWidth = 1;
+        c.beginPath(); c.arc(sx, sy, LBL.ring, 0, Math.PI * 2); c.stroke();
+        c.beginPath();
+        c.moveTo(sx + dx * LBL.ring * 0.7, sy + dy * LBL.ring * 0.7); c.lineTo(p1x, p1y); c.lineTo(p2x, p1y); c.stroke();
+        c.fillStyle = '#e4eeff'; c.textAlign = dx > 0 ? 'left' : 'right';
+        c.fillText(text, p1x + dx * 5, p1y - LBL.lift);
+        break;
+      }
+    }
+    c.globalAlpha = 1;
+  }
 
   // ================== АСТРОНОМИЯ (упрощённая) ==================
   // H_g — часовой угол солнца на Гринвиче, dec — склонение солнца
@@ -152,7 +216,7 @@
     const H = sol.Hg + lonDeg * DEG;
     const v = new THREE.Vector3(Math.cos(sol.dec) * Math.sin(H), Math.sin(sol.dec), -Math.cos(sol.dec) * Math.cos(H));
     v.applyAxisAngle(xAxis, Math.PI / 2 - latDeg * DEG);
-    return { dir: v, lst: H + sol.raSun };
+    return { dir: v, lst: H - sol.eot / 60 * 15 * DEG + sol.raSun };
   }
 
   // ================== СОСТОЯНИЕ ==================
@@ -450,6 +514,8 @@
   always.checked = loadFlag('always', false);
   follow.checked = loadFlag('follow', false);
   compassOn.checked = loadFlag('compass', true);
+  starLabelsOn.checked = loadFlag('starLabels', true);
+  starLabelsOn.addEventListener('change', () => saveFlag('starLabels', starLabelsOn.checked));
   const smooth = $('smooth');
   smooth.checked = loadFlag('smooth', true);
   smooth.addEventListener('change', () => saveFlag('smooth', smooth.checked));
@@ -881,6 +947,7 @@
     updatePointer(s.dir, alt);
     drawCompass((Math.PI - yaw) / DEG, ((sunAz / DEG) + 360) % 360, alt);
     renderer.render(scene, camera);
+    drawStarLabels(starMat.uniforms.uNight.value);
 
     updateGlobe(sol);
     gRenderer.render(gScene, gCam);
