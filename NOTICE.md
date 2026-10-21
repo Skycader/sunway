@@ -5,3 +5,4 @@
 - **Флаги** (`vendor/fonts/TwemojiCountryFlags.woff2`, шрифт Twemoji Country Flags) — CC-BY 4.0, Twitter / полифил country-flag-emoji-polyfill.
 - **Карта суши** (`js/land-data.js`) — Natural Earth 50m через world-atlas, общественное достояние.
 - **Звёзды** (`js/stars-data.js`) — каталог [HYG Database](https://github.com/astronexus/HYG-Database) v4.1, CC BY-SA 4.0 (Hipparcos, Yale Bright Star, Gliese). Собирается скриптом `tools/build-stars.js`.
+- **Млечный Путь** (`js/milkyway-data.js`) — карта плотности звёзд из того же каталога HYG, `tools/build-milkyway.js`.

@@ -145,6 +145,64 @@
   const tilt = new THREE.Group();
   const spin = new THREE.Group();
   spin.add(new THREE.Points(starGeo, starMat));
+  // Млечный Путь: карта плотности звёзд в галактических координатах (js/milkyway-data.js) + аналитические
+  // диск, балдж, Большая Трещина и зернистость. Сфера внутри `spin`, поэтому вращается вместе со звёздами.
+  const mwTex = new THREE.Texture();
+  mwTex.flipY = false; mwTex.generateMipmaps = false;
+  mwTex.wrapS = THREE.RepeatWrapping; mwTex.wrapT = THREE.ClampToEdgeWrapping;
+  mwTex.minFilter = mwTex.magFilter = THREE.LinearFilter;
+  const mwImg = new Image();
+  mwImg.onload = () => { mwTex.image = mwImg; mwTex.needsUpdate = true; };
+  mwImg.src = MW_PNG;
+  const mwMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uMW: { value: mwTex }, uNight: starMat.uniforms.uNight, uBMax: { value: MW_B_MAX }, uGain: { value: 0.36 } },
+    vertexShader: `
+      varying vec3 vDir; varying float vY;
+      void main(){
+        vDir = position;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vY = normalize(wp.xyz).y;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: `
+      uniform sampler2D uMW; uniform float uNight; uniform float uBMax; uniform float uGain;
+      varying vec3 vDir; varying float vY;
+      float h3(vec3 p){ p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float vnoise(vec3 x){
+        vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z);
+      }
+      float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; } return s; }
+      void main(){
+        if (vY < 0.0 || uNight < 0.01) discard;
+        vec3 d = normalize(vDir);
+        vec3 e = vec3(-d.z, -d.x, d.y);                                   // экваториальный единичный вектор
+        // экваториальные → галактические (J2000): x на центр Галактики, z на северный полюс
+        vec3 g = vec3(dot(vec3(-0.0548755604, -0.8734370902, -0.4838350155), e),
+                      dot(vec3( 0.4941094279, -0.4448296300,  0.7469822445), e),
+                      dot(vec3(-0.8676661490, -0.1980763734,  0.4559837762), e));
+        float l = atan(g.y, g.x), b = asin(clamp(g.z, -1.0, 1.0));
+        float ld = degrees(l), bd = degrees(b);
+        float tex = texture2D(uMW, vec2(fract(l / 6.2831853), bd / (2.0 * uBMax) + 0.5)).r * smoothstep(uBMax, uBMax - 8.0, abs(bd));
+        float disk  = exp(-abs(bd) / 10.0);
+        float bulge = 1.8 * exp(-pow(ld / 24.0, 2.0) - pow(bd / 9.0, 2.0));
+        // Большая Трещина (Лебедь — Стрелец) и Угольный Мешок у Южного Креста
+        float rift = max(exp(-pow((ld - 18.0) / 48.0, 2.0)), 0.7 * exp(-pow((ld + 58.0) / 16.0, 2.0)));
+        float lane = exp(-pow((bd - 0.6) / 2.2, 2.0)) * rift;
+        float clouds = fbm(d * 9.0 + 3.7), grain = fbm(d * 55.0);
+        float I = (disk * 0.9 + bulge) * (0.35 + 1.1 * tex) * (0.65 + 0.7 * clouds) * (0.8 + 0.4 * grain);
+        I *= 1.0 - 0.7 * lane * smoothstep(0.25, 0.7, clouds + 0.15);
+        I *= smoothstep(0.02, 0.3, vY);                                   // у горизонта свет гасит атмосфера
+        float warm = exp(-pow(ld / 40.0, 2.0)) * exp(-pow(bd / 14.0, 2.0));
+        vec3 col = mix(vec3(0.70, 0.80, 1.0), vec3(1.0, 0.86, 0.68), warm);
+        gl_FragColor = vec4(col * I * uGain * uNight, 1.0);
+      }`
+  });
+  const mwDome = new THREE.Mesh(new THREE.SphereGeometry(950, 64, 32), mwMat);
+  mwDome.frustumCulled = false;
+  spin.add(mwDome);
   tilt.add(spin);
   scene.add(tilt);
   const landscape = createLandscape(scene, renderer);
