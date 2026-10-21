@@ -68,35 +68,44 @@
 
 <div class="settings-pop" id="settingsPop" role="dialog" data-i-aria="settings" hidden>
   <div class="checklist">
-      <div class="check-row">
-        <label class="check" for="always" data-i-tip="tipAlways"><input type="checkbox" id="always"> <span data-i="always">Маркер Солнца</span></label>
-        <button type="button" class="icon-btn pill push" id="followBtn" aria-pressed="false" data-i-aria="followSunTip" data-i-tip="followSunTip">
+    <div class="set-group">
+      <span class="set-title" data-i="camera">Камера</span>
+      <div class="seg" role="group" data-i-aria="camera">
+        <button type="button" id="followOff" aria-pressed="true" data-i-tip="tipFree"><span data-i="segFree">Свободно</span></button>
+        <button type="button" id="followBtn" aria-pressed="false" data-i-tip="followSunTip">
           <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>
-          <span data-i="follow">Следовать</span>
+          <span data-i="sun">Солнце</span>
         </button>
-      </div>
-      <div class="check-row">
-        <label class="check" for="moonOn" data-i-tip="tipMoon"><input type="checkbox" id="moonOn"> <span data-i="showMoon">Показывать Луну</span></label>
-        <span class="moon-info" id="moonInfo"><svg class="moon-glyph" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path id="moonLit" d=""/></svg><span id="moonPct"></span></span>
-        <button type="button" class="icon-btn pill push" id="moonFocus" aria-pressed="false" data-i-aria="focusMoonTip" data-i-tip="focusMoonTip">
+        <button type="button" id="moonFocus" aria-pressed="false" data-i-tip="focusMoonTip">
           <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A8 8 0 1 1 9.4 4.5a6.4 6.4 0 0 0 10.1 10.1z"/></svg>
-          <span data-i="focus">Следовать</span>
+          <span data-i="moonLabel">Луна</span>
         </button>
-      </div>
-      <div class="check-row">
-        <label class="check" for="starLabels" data-i-tip="tipLabels"><input type="checkbox" id="starLabels"> <span data-i="starLabels">Подписывать звёзды</span></label>
-        <button type="button" class="icon-btn" id="starSearchBtn" data-i-aria="searchStars" data-i-tip="tipSearch"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-            <circle class="ico-lens" cx="14" cy="10" r="6.4"/>
-            <path class="ico-shine" d="M10.6 8.2a4 4 0 0 1 2.6-2.1"/>
-            <path class="ico-spark" d="M14 7.3l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z"/>
-            <path class="ico-handle" d="M9.6 14.4L4.6 19.4"/>
-          </svg></button>
-      </div>
-      <div class="check-row check-pair">
-        <label class="check" for="compassOn" data-i-tip="tipCompass"><input type="checkbox" id="compassOn"> <span data-i="compass">Компас</span></label>
-        <label class="check" for="smooth" data-i-tip="tipSmooth"><input type="checkbox" id="smooth"> <span data-i="smooth">Плавное ускорение</span></label>
       </div>
     </div>
+    <div class="set-sep"></div>
+    <div class="check-row">
+      <label class="check" for="always" data-i-tip="tipAlways"><input type="checkbox" id="always"> <span data-i="always">Маркер Солнца</span></label>
+    </div>
+    <div class="check-row">
+      <label class="check" for="moonOn" data-i-tip="tipMoon"><input type="checkbox" id="moonOn"> <span data-i="showMoon">Показывать Луну</span></label>
+      <span class="moon-info" id="moonInfo"><svg class="moon-glyph" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path id="moonLit" d=""/></svg><span id="moonPct"></span></span>
+    </div>
+    <div class="check-row">
+      <label class="check" for="starLabels" data-i-tip="tipLabels"><input type="checkbox" id="starLabels"> <span data-i="starLabels">Подписывать звёзды</span></label>
+      <button type="button" class="icon-btn" id="starSearchBtn" data-i-aria="searchStars" data-i-tip="tipSearch"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="ico-lens" cx="14" cy="10" r="6.4"/>
+          <path class="ico-shine" d="M10.6 8.2a4 4 0 0 1 2.6-2.1"/>
+          <path class="ico-spark" d="M14 7.3l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z"/>
+          <path class="ico-handle" d="M9.6 14.4L4.6 19.4"/>
+        </svg></button>
+    </div>
+    <div class="check-row">
+      <label class="check" for="compassOn" data-i-tip="tipCompass"><input type="checkbox" id="compassOn"> <span data-i="compass">Компас</span></label>
+    </div>
+    <div class="check-row">
+      <label class="check" for="smooth" data-i-tip="tipSmooth"><input type="checkbox" id="smooth"> <span data-i="smooth">Плавное ускорение</span></label>
+    </div>
+  </div>
 </div>
 
 <ul class="obs-menu" id="obsMenu" role="listbox" hidden></ul>

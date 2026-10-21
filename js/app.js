@@ -592,8 +592,9 @@
   function saveFlag(k, v) { try { localStorage.setItem('sky.' + k, v ? '1' : '0'); } catch (e) {} }
   const always = $('always'), compassOn = $('compassOn');
   // «Следовать за Солнцем» — кнопка; объект с полем checked нужен остальному коду, как у галочки раньше
-  const followBtn = $('followBtn');
-  const follow = { v: false, get checked() { return this.v; }, set checked(x) { this.v = !!x; followBtn.setAttribute('aria-pressed', String(this.v)); } };
+  const followBtn = $('followBtn'), followOff = $('followOff');
+  const updateFree = () => followOff.setAttribute('aria-pressed', String(!follow.v && !focusMoon));   // «Свободно» горит, когда не следим ни за чем
+  const follow = { v: false, get checked() { return this.v; }, set checked(x) { this.v = !!x; followBtn.setAttribute('aria-pressed', String(this.v)); updateFree(); } };
   always.checked = loadFlag('always', false);
   follow.checked = loadFlag('follow', false);
   compassOn.checked = loadFlag('compass', true);
@@ -606,10 +607,11 @@
   // «Следовать»: камера сама поворачивается к Луне и сопровождает её (зум не трогаем), пока не потянешь небо или не нажмёшь снова
   function setMoonFocus(on) {
     focusMoon = on;
-    moonFocusBtn.setAttribute('aria-pressed', String(on));
+    moonFocusBtn.setAttribute('aria-pressed', String(on)); updateFree();
     if (on) { focusing = false; markStar = -1; if (follow.checked) { follow.checked = false; saveFlag('follow', false); } }
   }
   moonFocusBtn.addEventListener('click', () => setMoonFocus(!focusMoon));
+  followOff.addEventListener('click', () => { follow.checked = false; saveFlag('follow', false); setMoonFocus(false); });
   const smooth = $('smooth');
   smooth.checked = loadFlag('smooth', true);
   smooth.addEventListener('change', () => saveFlag('smooth', smooth.checked));
