@@ -122,23 +122,23 @@
   starGeo.setAttribute('aColor', new THREE.BufferAttribute(tint, 3));
   const starMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uNight: { value: 0 }, uPR: { value: renderer.getPixelRatio() } },
+    uniforms: { uNight: { value: 0 }, uPR: { value: renderer.getPixelRatio() }, uHorizon: { value: 1 }, uScale: { value: 1 } },
     vertexShader: `
       attribute float aSize; attribute float aBri; attribute vec3 aColor;
       varying float vB; varying float vY; varying vec3 vC;
-      uniform float uPR;
+      uniform float uPR; uniform float uScale;
       void main(){
         vec4 wp = modelMatrix * vec4(position, 1.0);
         vY = normalize(wp.xyz).y; vB = aBri; vC = aColor;
-        gl_PointSize = aSize * uPR;
+        gl_PointSize = aSize * uPR * uScale;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: `
-      uniform float uNight; varying float vB; varying float vY; varying vec3 vC;
+      uniform float uNight; uniform float uHorizon; varying float vB; varying float vY; varying vec3 vC;
       void main(){
-        if (vY < 0.0) discard;
+        if (uHorizon > 0.5 && vY < 0.0) discard;
         float r = length(gl_PointCoord - 0.5);
-        float a = smoothstep(0.5, 0.0, r) * vB * uNight * smoothstep(0.0, 0.06, vY);
+        float a = smoothstep(0.5, 0.0, r) * vB * uNight * mix(1.0, smoothstep(0.0, 0.06, vY), uHorizon);
         gl_FragColor = vec4(vC, a);
       }`
   });
@@ -156,7 +156,7 @@
   mwImg.src = MW_PNG;
   const mwMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uMW: { value: mwTex }, uNight: starMat.uniforms.uNight, uBMax: { value: MW_B_MAX }, uGain: { value: 0.36 } },
+    uniforms: { uMW: { value: mwTex }, uNight: starMat.uniforms.uNight, uBMax: { value: MW_B_MAX }, uGain: { value: 0.36 }, uHorizon: { value: 1 } },
     vertexShader: `
       varying vec3 vDir; varying float vY;
       void main(){
@@ -166,7 +166,7 @@
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: `
-      uniform sampler2D uMW; uniform float uNight; uniform float uBMax; uniform float uGain;
+      uniform sampler2D uMW; uniform float uNight; uniform float uBMax; uniform float uGain; uniform float uHorizon;
       varying vec3 vDir; varying float vY;
       float h3(vec3 p){ p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float vnoise(vec3 x){
@@ -176,7 +176,7 @@
       }
       float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; } return s; }
       void main(){
-        if (vY < 0.0 || uNight < 0.01) discard;
+        if ((uHorizon > 0.5 && vY < 0.0) || uNight < 0.01) discard;
         vec3 d = normalize(vDir);
         vec3 e = vec3(-d.z, -d.x, d.y);                                   // экваториальный единичный вектор
         // экваториальные → галактические (J2000): x на центр Галактики, z на северный полюс
@@ -194,7 +194,7 @@
         float clouds = fbm(d * 9.0 + 3.7), grain = fbm(d * 55.0);
         float I = (disk * 0.9 + bulge) * (0.35 + 1.1 * tex) * (0.65 + 0.7 * clouds) * (0.8 + 0.4 * grain);
         I *= 1.0 - 0.7 * lane * smoothstep(0.25, 0.7, clouds + 0.15);
-        I *= smoothstep(0.02, 0.3, vY);                                   // у горизонта свет гасит атмосфера
+        I *= mix(1.0, smoothstep(0.02, 0.3, vY), uHorizon);               // у горизонта свет гасит атмосфера
         float warm = exp(-pow(ld / 40.0, 2.0)) * exp(-pow(bd / 14.0, 2.0));
         vec3 col = mix(vec3(0.70, 0.80, 1.0), vec3(1.0, 0.86, 0.68), warm);
         gl_FragColor = vec4(col * I * uGain * uNight, 1.0);
@@ -856,15 +856,21 @@
   sunGlow.scale.set(5, 5, 1);
   gScene.add(sunGlow);
 
-  // фоновые звёзды для мини-карты
+  // фон мини-карты: те же настоящие звёзды и Млечный Путь, что на небе наблюдателя. Группа в системе «Солнце неподвижно»:
+  // звёздная рамка (прямое восхождение от точки весны) поворачивается так, чтобы Солнце стояло на своём настоящем прямом
+  // восхождении, поэтому с датой фон медленно сдвигается. −π/2 переводит ось рамки неба в ось мини-модели.
+  const gStars = new THREE.Group();
+  gStars.scale.setScalar(0.28);
   {
-    const n = 500, p = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      const v = new THREE.Vector3().randomDirection ? new THREE.Vector3().randomDirection() : new THREE.Vector3(Math.random()-.5, Math.random()-.5, Math.random()-.5).normalize();
-      v.multiplyScalar(250); p.set([v.x, v.y, v.z], i * 3);
-    }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-    gScene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x9fb4d8, size: 1.2, sizeAttenuation: false, transparent: true, opacity: 0.6 })));
+    const gStarMat = starMat.clone();
+    gStarMat.uniforms.uNight = { value: 0.9 }; gStarMat.uniforms.uHorizon.value = 0; gStarMat.uniforms.uScale.value = 0.75;
+    gStarMat.uniforms.uPR.value = gRenderer.getPixelRatio();
+    const pts = new THREE.Points(starGeo, gStarMat); pts.frustumCulled = false;
+    const gMwMat = mwMat.clone();
+    gMwMat.uniforms.uMW.value = mwTex; gMwMat.uniforms.uNight = { value: 1 }; gMwMat.uniforms.uHorizon.value = 0; gMwMat.uniforms.uGain.value = 0.5;
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(950, 48, 24), gMwMat); dome.frustumCulled = false;
+    gStars.add(pts, dome);
+    gScene.add(gStars);
   }
 
   const sunW = new THREE.Vector3();
@@ -872,6 +878,7 @@
     sunW.set(Math.cos(sol.dec), Math.sin(sol.dec), 0);
     earthMat.uniforms.uSun.value.copy(sunW);
     earth.rotation.y = sol.Hg;
+    gStars.rotation.y = -Math.PI / 2 - sol.raSun;
     sunGlow.position.copy(sunW).multiplyScalar(SUN_DIST);
   }
 
