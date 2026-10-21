@@ -32,7 +32,7 @@ const I18N = (() => {
       zoom: 'зум', weight: n => 'вес 70 кг → ' + n + ' кг', weightless: 'НЕВЕСОМОСТЬ / РАЗРУШЕНИЕ ПЛАНЕТЫ',
       zoomTip: 'Зум ×1 — поле зрения человека, 120° по длинной стороне экрана.\n' +
         'Первое число в скобках — текущий угол обзора по длинной стороне экрана.\n' +
-        'Второе — видимый размер Солнца с учётом увеличения, в масштабе зума ×1. Реальный — 0,53° (32′), при ×60 Солнце выглядит как объект около 31°.',
+        'Второе — видимый размер Солнца с учётом увеличения, в масштабе зума ×1. Реальный — 0,53° (32′), при ×1200 Солнце заполняет почти всё небо (около 160°).',
       weightTip: 'Вес человека массой 70 кг на весах в точке наблюдателя.\n' +
         'Если сутки ускорены в X раз, Земля крутится в X раз быстрее, и центробежная сила растёт как X².\n' +
         'При ×1 учтены сплюснутость Земли и реальное вращение: полюс ≈ 70,18 кг, 50° ≈ 70,04 кг, экватор ≈ 69,81 кг.\n' +
@@ -77,7 +77,7 @@ const I18N = (() => {
       zoom: 'zoom', weight: n => '70 kg → ' + n + ' kg', weightless: 'WEIGHTLESSNESS / PLANET BREAKS APART',
       zoomTip: 'Zoom ×1 is the human field of view, 120° along the long side of the screen.\n' +
         'The first number in brackets is the current field of view along the long side of the screen.\n' +
-        'The second is the apparent size of the Sun with magnification, at zoom ×1 scale. The real one is 0.53° (32′); at ×60 the Sun looks like an object about 31° wide.',
+        'The second is the apparent size of the Sun with magnification, at zoom ×1 scale. The real one is 0.53° (32′); at ×1200 the Sun fills almost the whole sky (about 160°).',
       weightTip: 'Weight of a 70 kg person on scales at the observer’s location.\n' +
         'If the day is sped up X times, the Earth spins X times faster and the centrifugal force grows as X².\n' +
         'At ×1 the Earth’s oblateness and real rotation are included: pole ≈ 70.18 kg, 50° ≈ 70.04 kg, equator ≈ 69.81 kg.\n' +

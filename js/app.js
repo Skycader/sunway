@@ -12,7 +12,7 @@
   // Зум ×1 = поле зрения человека по длинной стороне экрана (бинокулярное, ~120°).
   // Шире прямолинейная проекция не умеет: к 180° картинка растягивается до бесконечности.
   const EYE_FOV = 120;
-  const ZOOM_MIN = 1, ZOOM_MAX = 60;
+  const ZOOM_MIN = 1, ZOOM_MAX = 1200;
   let zoom = 1, zoomSliding = false;
   function longFov() { return 2 * Math.atan(Math.tan(EYE_FOV / 2 * DEG) / zoom) / DEG; }
   function applyZoom() {
@@ -379,6 +379,7 @@
     if (!zoomSliding) zRange.value = Math.round(zpos * 1000);
     zRange.style.setProperty('--p', (zpos * 100).toFixed(1) + '%');
     zRange.setAttribute('aria-label', t('zoomLabel'));
+    moonMat.uniforms.uDetail.value = THREE.MathUtils.smoothstep(zShown, 40, 500);   // вблизи добавляем мелкое зерно: текстура Луны 2k сама по себе уже мылится
     zCam.style.setProperty('--zs', (0.12 + 0.88 * spos).toFixed(3));      // объектив «выезжает» по мере увеличения
   }
   function dayLenText(mult) {
