@@ -290,7 +290,7 @@
   const slider = $('speed');
   // Модель знает день года (сезон), год и время суток. Год влияет почти только на фазу Луны: цикл 29,53 суток не
   // укладывается в год, поэтому одна и та же дата в разные годы даёт разные фазы. Время идёт по кругу внутри дня.
-  let simYear = new Date().getFullYear();
+  let simYear = new Date().getUTCFullYear();
   let YEAR0 = Date.UTC(simYear, 0, 1);
   const DAY = 864e5;
   const mod = (v, m) => ((v % m) + m) % m;
@@ -446,7 +446,10 @@
   doyIn.value = doy;
   function syncDoy() {
     const decl = solar(simTime).dec / DEG;
-    $('doyLabel').textContent = fmtDay.format(new Date(simTime)) + ' · δ ' + (decl >= 0 ? '+' : '−') + num(Math.abs(decl).toFixed(1)) + '°';
+    $('doyLabel').textContent = fmtDay.format(new Date(simTime));
+    const dl = $('declLabel');
+    dl.textContent = 'δ ' + (decl >= 0 ? '+' : '−') + num(Math.abs(decl).toFixed(1)) + '°';
+    dl.dataset.tip = t('declTip');
     $('season').classList.toggle('south', observer.lat < 0);
   }
   // ---------- мини-карта в мини-карте: орбита Земли, вид с северного полюса эклиптики ----------
@@ -859,7 +862,16 @@
     if (obsMenu) obsMenu.select(observerSite);
   }
   placeObserver();
-  initYearMenu({ get: () => simYear, set: setYear });
+  const yearMenu = initYearMenu({ get: () => simYear, set: setYear });
+  // «Сейчас»: настоящие год, дата и время суток (скорость и пауза остаются как были)
+  $('nowBtn').addEventListener('click', () => {
+    const n = new Date();
+    simYear = n.getUTCFullYear(); YEAR0 = Date.UTC(simYear, 0, 1);
+    doy = Math.min(364, Math.round((Date.UTC(simYear, n.getUTCMonth(), n.getUTCDate()) - YEAR0) / DAY));
+    todUtc = mod(Date.now(), DAY);
+    doyIn.value = doy;
+    setSim(); syncDoy(); updDaylen(); yearMenu.refresh();
+  });
   obsMenu = initObservatoryMenu({
     coords: () => observer,
     pick(i) { observerSite = i; observer.lat = OBSERVATORIES[i].lat; observer.lon = OBSERVATORIES[i].lon; placeObserver(); },

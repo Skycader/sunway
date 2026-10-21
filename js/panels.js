@@ -196,4 +196,5 @@ function initYearMenu(ctx) {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
   addEventListener('resize', () => { if (!menu.hidden) place(); });
   mark();
+  return { refresh: mark };
 }

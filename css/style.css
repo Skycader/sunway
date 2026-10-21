@@ -123,7 +123,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--sun); outli
 .season { display: flex; flex-direction: column; gap: 4px; }
 .season-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .season-head .lab { margin: 0; }
-.season-head span:last-child { font-family: var(--f-num); font-size: 12px; font-variant-numeric: tabular-nums; }
+.season-head #doyLabel { font-family: var(--f-num); font-size: 12px; font-variant-numeric: tabular-nums; }
 .season { --win: #7fb0e6; --spr: #78c98a; --sum: #f0c24f; --aut: #e0884a; }
 .season.south { --win: #f0c24f; --sum: #7fb0e6; --spr: #e0884a; --aut: #78c98a; }
 .season { --g: linear-gradient(to right,
@@ -352,3 +352,23 @@ button.obs-btn #obsCoord { cursor: pointer; user-select: none; -webkit-user-sele
 .gmoon { color: #cfdcf5; }
 .gmoon i { border-left-color: #cfdcf5; }
 .orbit.show ~ .gmoon { opacity: 0; }
+
+/* строка «день года» держится в одну линию: подпись остаётся для доступности, но скрыта визуально */
+.season-head .lab { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.season-head { position: relative; flex-wrap: nowrap; justify-content: flex-end; }
+.season-right { flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
+.season-right > * { white-space: nowrap; flex: none; }
+.season-right #doyLabel { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.decl { position: relative; cursor: help; color: var(--sun); font-family: var(--f-num); font-size: 12px; font-variant-numeric: tabular-nums; border-bottom: 1px dotted rgba(255,196,107,.55); }
+.decl::after {
+  content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 10px); width: 250px; z-index: 30; padding: 9px 11px;
+  font: 400 12px/1.45 var(--f-ui); color: var(--ink); text-align: left; white-space: normal; border-radius: 10px;
+  background: rgba(10,16,30,.97); border: 1px solid var(--glass-line); box-shadow: 0 10px 28px rgba(0,0,0,.5);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); opacity: 0; transform: translateY(4px); pointer-events: none; transition: opacity .15s, transform .15s;
+}
+.decl:hover::after, .decl:focus-visible::after { opacity: 1; transform: none; }
+
+/* без дыры слева: кнопки прижаты влево, дата с δ — вправо */
+.season-head { justify-content: flex-start; }
+.season-right { flex: 1 1 auto; width: 100%; }
+.season-right #doyLabel { margin-left: auto; }
