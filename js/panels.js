@@ -46,6 +46,38 @@ function initObservatoryMenu(ctx) {
   addEventListener('resize', () => { if (!menu.hidden) place(); });
   I18N.onChange(render);
   render();
+
+  // правая кнопка: копировать координаты или открыть точку в Google Картах
+  const ctxMenu = document.getElementById('obsCtx'), copyText = document.getElementById('ctxCopyText');
+  const closeCtx = () => { ctxMenu.hidden = true; };
+  const here = () => { const o = ctx.coords(); return o.lat.toFixed(5) + ', ' + o.lon.toFixed(5); };
+  btn.addEventListener('contextmenu', e => {
+    e.preventDefault(); close();
+    copyText.textContent = t('copyCoords');
+    ctxMenu.hidden = false;
+    const w = ctxMenu.offsetWidth, h = ctxMenu.offsetHeight;
+    ctxMenu.style.left = Math.max(8, Math.min(innerWidth - w - 8, e.clientX)) + 'px';
+    ctxMenu.style.top = Math.max(8, Math.min(innerHeight - h - 8, e.clientY)) + 'px';
+  });
+  document.getElementById('ctxMaps').addEventListener('click', () => {
+    window.open('https://www.google.com/maps?q=' + encodeURIComponent(here()), '_blank', 'noopener');
+    closeCtx();
+  });
+  document.getElementById('ctxCopy').addEventListener('click', async () => {
+    const text = here();
+    try { await navigator.clipboard.writeText(text); }
+    catch (err) {                                   // file:// и старые браузеры: запасной путь через скрытое поле
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e2) {} ta.remove();
+    }
+    copyText.textContent = t('copied');
+    setTimeout(closeCtx, 700);
+  });
+  document.addEventListener('pointerdown', e => { if (!ctxMenu.contains(e.target)) closeCtx(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtx(); });
+  addEventListener('blur', closeCtx);
+  addEventListener('resize', closeCtx);
+
   return {
     // выделяем в списке текущую обсерваторию
     select(i) { menu.querySelectorAll('li').forEach(li => li.setAttribute('aria-selected', String(+li.dataset.idx === i))); },

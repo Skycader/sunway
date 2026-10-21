@@ -318,3 +318,10 @@ button.obs-btn:hover { background: rgba(200,220,255,.11); border-color: rgba(200
 }
 .star-table-wrap::-webkit-scrollbar-thumb:hover, .obs-menu::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(255,214,150,.55), rgba(240,170,80,.4)); border-color: rgba(255,214,150,.5); }
 .star-table-wrap::-webkit-scrollbar-corner { background: transparent; }
+
+/* кнопка наблюдателя целиком — «нажимаемая»: курсор-рука везде, текст не выделяется */
+button.obs-btn, button.obs-btn * { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.obs-ctx { z-index: 70; min-width: 220px; padding: 4px; overflow: visible; }
+.obs-ctx li { flex-direction: row; align-items: center; gap: 10px; font: 600 13px var(--f-ui); color: var(--ink); user-select: none; }
+.ctx-ico { width: 16px; text-align: center; color: var(--sun); font-size: 14px; }
+button.obs-btn #obsCoord { cursor: pointer; user-select: none; -webkit-user-select: none; }   /* общее правило для #obsCoord, #clock… даёт курсор-текст */

@@ -775,6 +775,7 @@
   }
   placeObserver();
   obsMenu = initObservatoryMenu({
+    coords: () => observer,
     pick(i) { observerSite = i; observer.lat = OBSERVATORIES[i].lat; observer.lon = OBSERVATORIES[i].lon; placeObserver(); },
   });
   obsMenu.select(observerSite);
