@@ -488,15 +488,19 @@ button#pause:not(.paused) .orb { filter: drop-shadow(0 1px 1px rgba(120,60,0,.55
 .zoom-panel { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px 11px; cursor: help; }
 .zoom-panel .lab { margin: 0; }
 .zoom-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.zoom-cam { width: 62px; height: 38px; flex: none; fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-.cam-body { fill: rgba(200,220,255,.08); }
-.cam-led { fill: var(--sun); stroke: none; }
-.cam-mount { fill: rgba(10,16,30,.5); }
-.cam-barrel { fill: rgba(200,220,255,.12); transform-origin: 24px 17px; transform: scaleX(var(--zs, .12)); }
-.cam-glass { transform: translateX(calc(var(--zs, .12) * 18px)); }
-.cam-glass-ring { fill: rgba(10,16,30,.7); stroke: var(--sun); stroke-width: 1.6; }
-.cam-glass-core { fill: rgba(255,196,107,.35); stroke: none; }
-.cam-glint { stroke: rgba(255,255,255,.8); stroke-width: 1.1; }
+.zoom-cam { width: 52px; height: 52px; flex: none; fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; overflow: visible; --zs: .12; }
+/* вид объектива спереди: рамки видоискателя сжимаются, кольцо зума с насечками поворачивается, стекло разгорается */
+.cam-ring { stroke: rgba(220,235,255,.85); }
+.cam-ticks { stroke: rgba(220,235,255,.55); stroke-width: 3.2; stroke-dasharray: .9 2.6; transform: rotate(calc(var(--zs) * 300deg)); }
+.cam-barrel { stroke: rgba(220,235,255,.4); fill: rgba(200,220,255,.07); }
+.cam-glass { fill: rgba(255,196,107,calc(.16 + var(--zs) * .32)); stroke: var(--sun); stroke-width: 1.5; }
+.cam-glint { stroke: rgba(255,255,255,.85); stroke-width: 1.1; }
+.cam-core { fill: var(--sun); stroke: none; opacity: calc(.4 + var(--zs) * .6); }
+.br { stroke: var(--sun); stroke-width: 1.6; --d: calc(19 - var(--zs) * 6.5); }
+.br.tl { transform: translate(calc(var(--d) * -1px), calc(var(--d) * -1px)) scale(-1, -1); }
+.br.tr { transform: translate(calc(var(--d) * 1px), calc(var(--d) * -1px)) scale(1, -1); }
+.br.bl { transform: translate(calc(var(--d) * -1px), calc(var(--d) * 1px)) scale(-1, 1); }
+.br.brr { transform: translate(calc(var(--d) * 1px), calc(var(--d) * 1px)); }
 .zoom-val b { display: block; min-width: 4.4ch; text-align: right; font: 500 28px/1 var(--f-num); font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--ink); }
 input.zoomrange { width: 100%; height: 22px; margin: 2px 0 0; }
 input.zoomrange::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, rgba(255,196,107,.95) var(--p, 0%), rgba(200,220,255,.2) var(--p, 0%)); }
@@ -512,6 +516,6 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
   .hud-col { flex-direction: row; width: 100%; }
   .hud-col .panel { flex: 1 1 0; min-width: 0; }
   .zoom-foot { flex-wrap: wrap; white-space: normal; gap: 0 8px; }
-  .zoom-cam { width: 52px; height: 32px; }
+  .zoom-cam { width: 44px; height: 44px; }
   .zoom-val b { font-size: 24px; min-width: 3.6ch; }
 }
