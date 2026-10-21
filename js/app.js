@@ -84,7 +84,9 @@
         gl_FragColor = vec4(col, 1.0);
       }`
   });
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(1000, 64, 32), skyMat));
+  const skyDome = new THREE.Mesh(new THREE.SphereGeometry(1000, 64, 32), skyMat);
+  skyDome.renderOrder = -1;   // небо первым: ландшафт с буфером глубины рисуется поверх
+  scene.add(skyDome);
 
   // звёзды на небесной сфере
   const N = 2600, R = 900;
@@ -130,6 +132,7 @@
   spin.add(new THREE.Points(starGeo, starMat));
   tilt.add(spin);
   scene.add(tilt);
+  const landscape = createLandscape(scene);
 
   // ================== АСТРОНОМИЯ (упрощённая) ==================
   // H_g — часовой угол солнца на Гринвиче, dec — склонение солнца
@@ -838,6 +841,7 @@
     const sol = solar(simTime);
     const s = skySun(sol, observer.lat, observer.lon);
     skyMat.uniforms.uSun.value.copy(s.dir);
+    landscape.update(s.dir, now / 1000);
     starMat.uniforms.uNight.value = 1 - THREE.MathUtils.smoothstep(s.dir.y, -0.21, -0.03);
     tilt.rotation.x = Math.PI / 2 - observer.lat * DEG;
     spin.rotation.y = -s.lst;

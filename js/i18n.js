@@ -64,7 +64,7 @@ const I18N = (() => {
       sunPtr: 'sun',
     },
   };
-  const FLAG = { ru: '🇷🇺', en: '🇬🇧' };
+  const FLAG = { ru: '🇷🇺', en: '🇺🇸' };
   const listeners = [];
   const store = {
     get() { try { return localStorage.getItem('sky.lang'); } catch (e) { return null; } },
