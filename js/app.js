@@ -1289,7 +1289,7 @@
     mCard.style.transform = `translate(${Math.max(8, cx)}px, ${Math.max(8, cy)}px)`;
   }
   canvas.addEventListener('contextmenu', e => { e.preventDefault(); showMeasure(pickTarget(e.clientX, e.clientY)); });
-  mAct.addEventListener('click', () => { if (measure && measure.action) measure.action.run(); });
+  mAct.addEventListener('click', () => { if (measure && measure.action) { measure.action.run(); hideMeasure(); } });   // после «Следить» плашка уходит, остаётся рамка захвата
   document.addEventListener('pointerdown', e => { if (e.button === 0 && !mCard.contains(e.target)) hideMeasure(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMeasure(); });
 
