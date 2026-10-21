@@ -408,3 +408,9 @@ button.obs-btn #obsCoord { cursor: pointer; user-select: none; -webkit-user-sele
 /* белый текст и значок на кнопке «Идёт время» (на паузе остаётся приглушённым) */
 button#pause:not(.paused) { color: #fff; text-shadow: 0 1px 2px rgba(120,60,0,.6); }
 button#pause:not(.paused) .orb { filter: drop-shadow(0 1px 1px rgba(120,60,0,.55)); }
+
+/* компактный список: слева галочка (+ фаза), справа кнопка «Следовать»; две галочки — в одну строку */
+.check-row .push { margin-left: auto; }
+.check-pair { justify-content: space-between; }
+.ico-sm { stroke-width: 1.7; }
+.check-row .pill svg { color: var(--sun); }

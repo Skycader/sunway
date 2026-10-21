@@ -225,7 +225,7 @@
   // ---------- подписи звёзд: кольцо, от него наклонная линия и название на полке ----------
   const labels = $('labels'), lctx = labels.getContext('2d'), starLabelsOn = $('starLabels');
   const starPos = new THREE.Vector3();
-  let markStar = -1, markUntil = 0, focusing = false, focusMoon = false, moonZoomPending = false;   // выбранная в поиске звезда и плавный наведение камеры
+  let markStar = -1, markUntil = 0, focusing = false, focusMoon = false;   // выбранная в поиске звезда и плавный наведение камеры
   const LBL = { ring: 6, diag: 14, lift: 3 };
   function drawStarLabels(night) {
     const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight;
@@ -572,7 +572,6 @@
   bindDrag($('compass'), COMPASS_GAIN, true);
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
-    moonZoomPending = false;
     zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * Math.exp(-e.deltaY * 0.0015)));
     applyZoom();
     updDaylen();
@@ -591,7 +590,10 @@
   // флажки, запоминаются в браузере
   function loadFlag(k, def) { try { const v = localStorage.getItem('sky.' + k); return v === null ? def : v === '1'; } catch (e) { return def; } }
   function saveFlag(k, v) { try { localStorage.setItem('sky.' + k, v ? '1' : '0'); } catch (e) {} }
-  const always = $('always'), follow = $('follow'), compassOn = $('compassOn');
+  const always = $('always'), compassOn = $('compassOn');
+  // «Следовать за Солнцем» — кнопка; объект с полем checked нужен остальному коду, как у галочки раньше
+  const followBtn = $('followBtn');
+  const follow = { v: false, get checked() { return this.v; }, set checked(x) { this.v = !!x; followBtn.setAttribute('aria-pressed', String(this.v)); } };
   always.checked = loadFlag('always', false);
   follow.checked = loadFlag('follow', false);
   compassOn.checked = loadFlag('compass', true);
@@ -601,19 +603,19 @@
   moonOn.checked = loadFlag('moon', true);
   moonFocusBtn.disabled = !moonOn.checked;
   moonOn.addEventListener('change', () => { saveFlag('moon', moonOn.checked); moonFocusBtn.disabled = !moonOn.checked; if (!moonOn.checked) setMoonFocus(false); });
-  // «Фокус»: камера сама поворачивается к Луне, приближает и сопровождает её, пока не потянешь небо или не нажмёшь снова
+  // «Следовать»: камера сама поворачивается к Луне и сопровождает её (зум не трогаем), пока не потянешь небо или не нажмёшь снова
   function setMoonFocus(on) {
-    focusMoon = on; moonZoomPending = on;
+    focusMoon = on;
     moonFocusBtn.setAttribute('aria-pressed', String(on));
     if (on) { focusing = false; markStar = -1; if (follow.checked) { follow.checked = false; saveFlag('follow', false); } }
   }
   moonFocusBtn.addEventListener('click', () => setMoonFocus(!focusMoon));
-  const MOON_ZOOM = 40;
   const smooth = $('smooth');
   smooth.checked = loadFlag('smooth', true);
   smooth.addEventListener('change', () => saveFlag('smooth', smooth.checked));
   always.addEventListener('change', () => saveFlag('always', always.checked));
-  follow.addEventListener('change', () => saveFlag('follow', follow.checked));
+  // слежение за Солнцем и за Луной исключают друг друга
+  followBtn.addEventListener('click', () => { follow.checked = !follow.checked; saveFlag('follow', follow.checked); if (follow.checked) setMoonFocus(false); });
   compassOn.addEventListener('change', () => { saveFlag('compass', compassOn.checked); applyCompass(); });
 
   // ---------- компас (пеленг по горизонтали взгляда) ----------
@@ -1149,10 +1151,6 @@
       const k = 1 - Math.exp(-dt * 5);
       let dy = ty - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       yaw += dy * k; pitch += (tp - pitch) * k;
-      if (moonZoomPending) {
-        zoom = Math.min(MOON_ZOOM, zoom * Math.exp(dt * 2.5)); applyZoom();
-        if (zoom >= MOON_ZOOM) moonZoomPending = false;
-      }
     }
 
     const sunAz = Math.atan2(-s.dir.x, s.dir.z);
