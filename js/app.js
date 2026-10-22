@@ -1181,31 +1181,45 @@
     if (down !== visorDown) { visorDown = down; shadeEl.dataset.state = down ? 'down' : 'up'; visorSound(down); }
     if (down) shadeEl.style.opacity = (shadeK * 0.94).toFixed(3);                        // при подъёме оставляем как есть, пока он уезжает вверх
   }
-  // звук визора: шум с фильтром (взмах), «сервопривод» и щелчок защёлки; синтез на WebAudio, без файлов
+  // звук визора: тихий и «материальный» — короткий шорох воздуха, глухой стук корпуса и сухой щелчок защёлки.
+  // Всё из фильтрованного шума и одного низкого синуса (без пил и квадратов, они звучат мультяшно); синтез на WebAudio, без файлов
   let audioCtx = null, lastVisorSnd = 0, visorDown = false;
   addEventListener('pointerdown', () => { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {} }, { once: true });
   function visorSound(down) {
     const now = performance.now();
     if (!audioCtx || audioCtx.state !== 'running' || now - lastVisorSnd < 120) return;
     lastVisorSnd = now;
-    const ctx = audioCtx, t0 = ctx.currentTime + 0.005, dur = down ? 0.17 : 0.14;
-    const noiseBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate), nd = noiseBuf.getChannelData(0);
-    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.8;
-    bp.frequency.setValueAtTime(down ? 3400 : 700, t0); bp.frequency.exponentialRampToValueAtTime(down ? 650 : 3400, t0 + dur);
-    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.17, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(t0);
-    const servo = ctx.createOscillator(); servo.type = 'sawtooth';                          // тонкий вой привода
-    servo.frequency.setValueAtTime(down ? 540 : 250, t0); servo.frequency.exponentialRampToValueAtTime(down ? 230 : 540, t0 + dur * 0.9);
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500;
-    const sg = ctx.createGain(); sg.gain.setValueAtTime(0.0001, t0); sg.gain.exponentialRampToValueAtTime(0.035, t0 + 0.02); sg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    servo.connect(lp); lp.connect(sg); sg.connect(ctx.destination); servo.start(t0); servo.stop(t0 + dur + 0.02);
-    const tc = down ? t0 + dur * 0.92 : t0;                                                   // щелчок защёлки: в конце хода вниз, в начале хода вверх
-    const click = ctx.createOscillator(); click.type = 'square';
-    click.frequency.setValueAtTime(190, tc); click.frequency.exponentialRampToValueAtTime(70, tc + 0.035);
-    const cg = ctx.createGain(); cg.gain.setValueAtTime(0.0001, tc); cg.gain.exponentialRampToValueAtTime(0.2, tc + 0.003); cg.gain.exponentialRampToValueAtTime(0.0001, tc + 0.05);
-    click.connect(cg); cg.connect(ctx.destination); click.start(tc); click.stop(tc + 0.06);
+    const ctx = audioCtx, t0 = ctx.currentTime + 0.004;
+    const master = ctx.createGain(); master.gain.value = 0.9;
+    const soften = ctx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 7000;     // срезаем резкий верх
+    master.connect(soften); soften.connect(ctx.destination);
+    const noise = (len, type, f0, f1, q, peak, t) => {                                                    // всплеск шума через фильтр с плавающей частотой
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * len), ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = type; f.Q.value = q;
+      f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + len);
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.012, len * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      src.connect(f); f.connect(g); g.connect(master); src.start(t);
+    };
+    const thump = (f0, f1, len, peak, t) => {                                                             // низкий стук: затухающий синус
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + len);
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + len + 0.02);
+    };
+    if (down) {
+      noise(0.11, 'bandpass', 2300, 1000, 0.9, 0.055, t0);                  // шорох воздуха при ходе вниз
+      const tl = t0 + 0.105;                                                // защёлка в конце хода
+      thump(135, 62, 0.07, 0.24, tl);                                       // глухой стук о корпус шлема
+      noise(0.022, 'highpass', 1900, 2400, 0.7, 0.13, tl);                  // сухой щелчок
+      noise(0.012, 'bandpass', 3300, 3000, 1.4, 0.06, tl + 0.034);          // тихий «так» второй пружины
+    } else {
+      noise(0.012, 'bandpass', 2700, 2500, 1.4, 0.1, t0);                   // расцепление защёлки
+      thump(100, 70, 0.04, 0.08, t0);
+      noise(0.1, 'bandpass', 1000, 2400, 0.9, 0.045, t0 + 0.02);            // шорох вверх
+    }
   }
 
   // ---------- лазерная указка: ПКМ сразу показывает расстояние до того, на что указали ----------
