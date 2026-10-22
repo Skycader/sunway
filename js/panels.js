@@ -256,3 +256,63 @@ function initTips() {
   document.addEventListener('pointerdown', hide);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
 }
+
+// ---------- история изменений: кнопка «Версия X» и окно, которое читает Changelog/<версия>.md ----------
+function initChangelog() {
+  const { t } = I18N;
+  const btn = document.getElementById('verBtn'), modal = document.getElementById('clModal'), body = document.getElementById('clBody'), tabs = document.getElementById('clTabs');
+  const cache = {};
+  let versions = [], current = '';
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // маленький и безопасный разбор Markdown: заголовки, списки, **жирный**, `код`, [ссылки](url), абзацы
+  const inline = s => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+|[^)\s]+\.md)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  function md(src) {
+    const out = []; let list = false, para = [];
+    const flushP = () => { if (para.length) { out.push('<p>' + inline(para.join(' ')) + '</p>'); para = []; } };
+    const flushL = () => { if (list) { out.push('</ul>'); list = false; } };
+    for (const raw of src.split(/\r?\n/)) {
+      const l = raw.trimEnd();
+      let m;
+      if (!l.trim()) { flushP(); flushL(); }
+      else if ((m = /^(#{1,3})\s+(.*)$/.exec(l))) { flushP(); flushL(); out.push(`<h${m[1].length + 1}>${inline(m[2])}</h${m[1].length + 1}>`); }
+      else if ((m = /^\s*[-*]\s+(.*)$/.exec(l))) { flushP(); if (!list) { out.push('<ul>'); list = true; } out.push('<li>' + inline(m[1]) + '</li>'); }
+      else if (/^---+$/.test(l.trim())) { flushP(); flushL(); out.push('<hr>'); }
+      else { flushL(); para.push(l.trim()); }
+    }
+    flushP(); flushL();
+    return out.join('');
+  }
+  async function load(v) {
+    current = v;
+    tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.v === v)));
+    body.innerHTML = '<div class="cl-msg">…</div>'; body.scrollTop = 0;
+    try {
+      if (!cache[v]) { const r = await fetch('Changelog/' + v + '.md', { cache: 'no-cache' }); if (!r.ok) throw new Error(r.status); cache[v] = await r.text(); }
+      body.innerHTML = md(cache[v]);
+    } catch (e) {
+      body.innerHTML = '<div class="cl-msg">' + esc(t('clNone') + ' ' + v + ' (Changelog/' + v + '.md)') + '</div>';
+    }
+  }
+  function renderTabs() {
+    tabs.innerHTML = '';
+    for (const v of versions) { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = v; b.textContent = v + '.md'; b.addEventListener('click', () => load(v)); tabs.appendChild(b); }
+  }
+  async function init() {
+    try { const r = await fetch('Changelog/index.json', { cache: 'no-cache' }); versions = await r.json(); } catch (e) { versions = [document.getElementById('verNum').textContent]; }
+    if (!versions.length) versions = [document.getElementById('verNum').textContent];
+    document.getElementById('verNum').textContent = versions[0];     // первая запись — текущий релиз
+    renderTabs();
+  }
+  const open = () => { modal.hidden = false; load(current || versions[0]); };
+  const close = () => { modal.hidden = true; };
+  btn.addEventListener('click', open);
+  document.getElementById('clClose').addEventListener('click', close);
+  modal.addEventListener('pointerdown', e => { if (e.target === modal) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
+  versions = [document.getElementById('verNum').textContent];
+  renderTabs();
+  init();
+}

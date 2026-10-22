@@ -170,6 +170,23 @@
   <div class="m-text"><b id="mDist"></b><span id="mName"></span><small id="mExtra"></small><button type="button" class="m-act" id="mAct" hidden></button></div>
 </div>
 
+<button type="button" class="ver-btn" id="verBtn"><span data-i="versionWord">Версия</span> <b id="verNum">0.0.1</b></button>
+
+<div class="modal" id="clModal" hidden>
+  <div class="modal-glass cl-modal" role="dialog" aria-modal="true" data-i-aria="changelog">
+    <div class="cl-head">
+      <svg class="cl-ico" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M8 3.5H20L25.5 9V28.5H8Z"/>
+        <path d="M19.5 3.5V9.5H25.5M12 14.5H21.5M12 18.5H21.5M12 22.5H18"/>
+      </svg>
+      <div class="cl-title" data-i="changelog">История изменений</div>
+      <button type="button" class="cl-x" id="clClose" data-i-aria="close">✕</button>
+    </div>
+    <div class="cl-tabs" id="clTabs"></div>
+    <div class="cl-body" id="clBody"></div>
+  </div>
+</div>
+
 <script src="vendor/three.min.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/land-data.js"></script>
