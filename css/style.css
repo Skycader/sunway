@@ -595,3 +595,28 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
 .cl-body a { color: #9cc7ff; }
 .cl-body hr { border: 0; height: 1px; margin: 14px 0; background: var(--glass-line); }
 .cl-msg { padding: 24px 8px; text-align: center; color: var(--ink-dim); }
+
+/* ---------- ускорение времени: круглый бегунок на нижнем краю кнопки «Идёт время», внутри него текущая скорость ---------- */
+.ticks { display: none; }
+.speedhead { justify-content: flex-end; }
+.play-wrap { position: relative; flex: 1 1 auto; min-width: 0; margin-bottom: 12px; }
+.play-wrap #pause { width: 100%; }
+/* сам input невидим и занимает полосу 28 px по нижнему краю: за него тянем; нарисованный бегунок — отдельный элемент ниже */
+.play-wrap #speed {
+  -webkit-appearance: none; appearance: none; position: absolute; left: 10px; right: 10px; bottom: -14px; width: auto; height: 28px;
+  margin: 0; padding: 0; background: transparent; cursor: ew-resize; touch-action: none; opacity: 1;
+}
+.play-wrap #speed:focus-visible { outline: none; }
+.play-wrap #speed::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+.play-wrap #speed::-moz-range-track { height: 28px; background: transparent; }
+.play-wrap #speed::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 28px; margin-top: 0; background: transparent; border: 0; }
+.play-wrap #speed::-moz-range-thumb { width: 30px; height: 28px; background: transparent; border: 0; }
+.speed-knob {
+  position: absolute; bottom: -12px; left: calc(10px + 15px + (100% - 50px) * var(--pf, 0)); transform: translateX(-50%);
+  min-width: 30px; height: 24px; padding: 0 8px; box-sizing: border-box; display: grid; place-items: center; pointer-events: none; white-space: nowrap;
+  font: 600 11.5px/1 var(--f-num); font-variant-numeric: tabular-nums; color: #fff; letter-spacing: -.01em;
+  background: rgba(10,16,30,.9); border: 1px solid rgba(255,214,150,.75); border-radius: 999px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.play-wrap:hover .speed-knob, .play-wrap #speed:active + .speed-knob { transform: translateX(-50%) scale(1.12); border-color: #ffd98f; box-shadow: 0 0 0 4px rgba(255,196,107,.22), 0 4px 12px rgba(0,0,0,.5); }

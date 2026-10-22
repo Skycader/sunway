@@ -70,7 +70,11 @@
       </div>
     </div>
     <div class="play-row">
-      <button id="pause" class="wide"><svg class="orb" viewBox="0 0 24 24" aria-hidden="true"><circle class="orb-ring" cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6"/><g class="orb-spin"><circle class="orb-planet" cx="20.5" cy="12" r="2.4"/></g></svg><span id="pauseText" data-i="playing">Идёт время</span></button>
+      <div class="play-wrap" id="playWrap">
+        <button id="pause" class="wide"><svg class="orb" viewBox="0 0 24 24" aria-hidden="true"><circle class="orb-ring" cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6"/><g class="orb-spin"><circle class="orb-planet" cx="20.5" cy="12" r="2.4"/></g></svg><span id="pauseText" data-i="playing">Идёт время</span></button>
+        <input type="range" id="speed" min="0" max="1000" step="1" value="0" data-i-aria="speedLabel" data-i-tip="tipSpeed" aria-label="Скорость времени">
+        <span class="speed-knob" id="speedKnob" aria-hidden="true">×1</span>
+      </div>
       <button type="button" class="icon-btn gear" id="gearBtn" aria-haspopup="true" aria-expanded="false" data-i-aria="settings" data-i-tip="settings">
         <svg class="ico gear-ico" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="6.2"/><circle cx="12" cy="12" r="2.4"/>
@@ -83,10 +87,8 @@
 
 <div class="speedbar">
   <div class="speedhead">
-    <div class="mult" id="mult">×1<small>реальное время</small></div>
     <div class="daylen" id="daylen">сутки за 24 ч</div>
   </div>
-  <input type="range" id="speed" min="0" max="1000" step="1" value="0" data-i-aria="speedLabel" aria-label="Скорость времени">
   <div class="ticks" id="ticks"></div>
 </div>
 

@@ -394,11 +394,13 @@
     else day = t('daylightIn')(fmtDur(dh * 3600 / mult));
     return t('dayIn')(fmtDur(86400 / mult)) + '\n' + day;
   }
+  const speedKnob = $('speedKnob');
   function onSlider() {
     const p = +slider.value / 1000;
     const raw = Math.pow(10, p * MAX_EXP);
     target = raw < 10 ? Math.round(raw * 10) / 10 : raw < 100 ? Math.round(raw) : Math.round(raw / 10) * 10;
     slider.style.setProperty('--p', (p * 100) + '%');
+    speedKnob.style.setProperty('--pf', p);
     updDaylen();
   }
   slider.addEventListener('input', onSlider);
@@ -1418,8 +1420,7 @@
       $('alt').textContent = alt.toFixed(1) + '°';
       $('az').textContent = az.toFixed(0) + '°';
       const shown = speed < 9.95 ? num(speed.toFixed(1).replace('.0', '')) : fmtNum.format(Math.round(speed));
-      $('mult').innerHTML = '×' + shown +
-        '<small>' + t(paused ? 'paused' : target === 1 && speed === 1 ? 'realtime' : 'accel') + '</small>';
+      speedKnob.textContent = '×' + shown;               // текущая скорость живёт прямо в бегунке под кнопкой
     }
     requestAnimationFrame(frame);
   }
