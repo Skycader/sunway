@@ -952,6 +952,61 @@
   // Чтобы увидеть её, колесом отдаляем камеру; у края кадра подпись-стрелка. Кольцо — орбита в её настоящей плоскости
   // (наклон 5,1° к эклиптике, узел движется)
   const EARTH_R_KM = 6371;
+  // «Фонарик» поля зрения: пирамида света от наблюдателя, повторяющая камеру (направление, ширину и высоту обзора).
+  // Живёт в системе вращающейся Земли в точке наблюдателя: оси (восток, вверх, север), углы пирамиды берём прямо из базиса камеры.
+  const fovOn = $('fovOn');
+  fovOn.checked = loadFlag('fovCone', false);
+  fovOn.addEventListener('change', () => saveFlag('fovCone', fovOn.checked));
+  const fovGroup = new THREE.Group(); fovGroup.matrixAutoUpdate = false; fovGroup.visible = false; fovGroup.frustumCulled = false;
+  earth.add(fovGroup);
+  const FOV_L = SUN_DIST;                         // пирамида достаёт до Солнца мини-модели (и проходит мимо Луны, если смотреть на неё)
+  const fovPos = new THREE.BufferAttribute(new Float32Array(5 * 3), 3), fovGeo = new THREE.BufferGeometry();
+  fovPos.setUsage(THREE.DynamicDrawUsage);
+  fovGeo.setAttribute('position', fovPos);
+  fovGeo.setAttribute('aT', new THREE.BufferAttribute(new Float32Array([0, 1, 1, 1, 1]), 1));
+  fovGeo.setIndex([0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1]);
+  const fovBeam = new THREE.Mesh(fovGeo, new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    vertexShader: 'attribute float aT; varying float vT; void main(){ vT = aT; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'varying float vT; void main(){ float a = 0.26 * pow(1.0 - vT, 0.6); gl_FragColor = vec4(1.0, 0.82, 0.48, a); }',
+  }));
+  fovBeam.frustumCulled = false;
+  const fovEdgeGeo = new THREE.BufferGeometry();
+  fovEdgeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+  fovEdgeGeo.getAttribute('position').setUsage(THREE.DynamicDrawUsage);
+  const fovEdges = new THREE.LineSegments(fovEdgeGeo, new THREE.LineBasicMaterial({ color: 0xffd98f, transparent: true, opacity: 0.6, depthWrite: false }));
+  fovEdges.frustumCulled = false;
+  fovGroup.add(fovBeam, fovEdges);
+  const fUp = new THREE.Vector3(), fEast = new THREE.Vector3(), fNorth = new THREE.Vector3(), fFwd = new THREE.Vector3(), fRight = new THREE.Vector3(), fCamUp = new THREE.Vector3(), fC = new THREE.Vector3();
+  const fovCorner = (sx, sy, tx, ty, out) => {       // угол пирамиды в системе (восток, вверх, север): мир неба → восток = −X, север = +Z
+    fC.copy(fFwd).addScaledVector(fRight, sx * tx).addScaledVector(fCamUp, sy * ty).multiplyScalar(FOV_L);
+    out.set(-fC.x, fC.y, fC.z);
+  };
+  const fc = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  function updateFov() {
+    fovGroup.visible = fovOn.checked;
+    if (!fovOn.checked) return;
+    const la = observer.lat * DEG, lo = observer.lon * DEG;
+    fUp.set(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo));
+    fEast.set(-Math.sin(lo), 0, -Math.cos(lo));
+    fNorth.crossVectors(fUp, fEast);
+    fovGroup.matrix.makeBasis(fEast, fUp, fNorth).setPosition(fUp.x * 1.004, fUp.y * 1.004, fUp.z * 1.004);
+    fovGroup.matrixWorldNeedsUpdate = true;
+    camera.getWorldDirection(fFwd);
+    fRight.setFromMatrixColumn(camera.matrixWorld, 0); fCamUp.setFromMatrixColumn(camera.matrixWorld, 1);
+    const ty = Math.tan(camera.fov * DEG / 2), tx = ty * camera.aspect;
+    fovCorner(-1, 1, tx, ty, fc[0]); fovCorner(1, 1, tx, ty, fc[1]); fovCorner(1, -1, tx, ty, fc[2]); fovCorner(-1, -1, tx, ty, fc[3]);
+    const p = fovPos.array;
+    p.fill(0, 0, 3);
+    for (let i = 0; i < 4; i++) { p[3 + i * 3] = fc[i].x; p[4 + i * 3] = fc[i].y; p[5 + i * 3] = fc[i].z; }
+    fovPos.needsUpdate = true;
+    const e = fovEdgeGeo.getAttribute('position').array;
+    let k = 0;
+    const put = v => { e[k++] = v.x; e[k++] = v.y; e[k++] = v.z; };
+    for (let i = 0; i < 4; i++) { e[k++] = 0; e[k++] = 0; e[k++] = 0; put(fc[i]); }                         // четыре ребра от наблюдателя
+    for (let i = 0; i < 4; i++) { put(fc[i]); put(fc[(i + 1) % 4]); }                                      // рамка на дальнем конце
+    fovEdgeGeo.getAttribute('position').needsUpdate = true;
+  }
   const gMoonRoot = new THREE.Group();
   const gMoonMat = MoonKit.material(moonTex);
   gMoonMat.uniforms.uGain.value = 1.0;
@@ -1460,6 +1515,7 @@
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
     camera.updateMatrixWorld();
+    updateFov();
 
     for (const c of cards) {
       tmp.copy(c.v).project(camera);
