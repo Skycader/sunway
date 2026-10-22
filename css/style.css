@@ -625,3 +625,57 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
 /* вес, длина суток и световой день — в левом нижнем углу */
 .speedhead { justify-content: flex-start; }
 .daylen { text-align: left; }
+
+/* ---------- защита от Солнца: тёмные очки ---------- */
+.shades {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(46,29,10,.80) 0%, rgba(26,16,6,.9) 62%, rgba(8,5,2,.97) 100%);
+}
+.shades[hidden] { display: none; }
+.shades-chip {
+  position: fixed; left: 50%; top: calc(54px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 85; opacity: 0; pointer-events: none;
+  display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 10px; font: 700 12px var(--f-ui); letter-spacing: .04em; color: var(--ink);
+  background: rgba(10,16,30,.78); border: 1px solid var(--glass-line); border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: opacity .2s;
+}
+.shades-chip svg { width: 28px; height: 18px; fill: none; stroke: var(--sun); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.shades-chip svg .lens { fill: rgba(255,196,107,.22); }
+
+/* тумблер прямо на плашке «Защита от Солнца» */
+.shades-chip { padding-right: 10px; }
+.shade-switch {
+  position: relative; width: 38px; height: 22px; padding: 0; flex: none; cursor: pointer; border-radius: 999px;
+  background: linear-gradient(180deg, #f9bd5c, #e8901f); border: 1px solid rgba(255,222,165,.9);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 0 10px rgba(255,196,107,.35); transition: background .18s, border-color .18s, box-shadow .18s;
+}
+.shade-switch i { position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(80,40,0,.5); transition: left .18s; }
+.shades-chip.off .shade-switch { background: rgba(200,220,255,.12); border-color: var(--glass-line); box-shadow: none; }
+.shades-chip.off .shade-switch i { left: 2px; background: #c5d1e6; }
+.shades-chip.off svg { stroke: var(--ink-dim); }
+
+/* ---------- узор «сота» на тёмных очках ---------- */
+.shades { --hex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='27.71' height='48' viewBox='0 0 27.71 48'%3E%3Cpath d='M13.86 0L27.71 8V24L13.86 32L0 24V8Z M13.86 32V48' fill='none' stroke='white' stroke-width='1.3' stroke-linejoin='round'/%3E%3C/svg%3E"); overflow: hidden; }
+/* сами соты: золотые линии, плотнее к краям «линзы» и почти пропадают в центре, где светит Солнце */
+.shades::before {
+  content: ""; position: absolute; inset: 0; background: rgba(255,208,140,.5);
+  -webkit-mask-image: var(--hex), radial-gradient(ellipse at 50% 50%, transparent 0%, #000 85%); -webkit-mask-size: 30px 52px, 100% 100%; -webkit-mask-composite: source-in;
+  mask-image: var(--hex), radial-gradient(ellipse at 50% 50%, transparent 0%, #000 85%); mask-size: 30px 52px, 100% 100%; mask-composite: intersect;
+  opacity: .55;
+}
+
+/* ---------- визор: резко опускается и поднимается, бронзовое стекло с бликом, светящаяся нижняя кромка ---------- */
+.shades {
+  transform: translateY(-102%);
+  background:
+    linear-gradient(115deg, transparent 18%, rgba(255,216,150,.13) 30%, rgba(255,216,150,.04) 40%, transparent 52%),
+    radial-gradient(ellipse at 50% 46%, rgba(78,47,14,.82) 0%, rgba(40,24,7,.92) 60%, rgba(10,6,2,.98) 100%);
+  transition: transform .13s cubic-bezier(.55,0,.9,.45);                      /* подъём: ускоряется */
+  will-change: transform, opacity;
+}
+.shades[data-state="down"] { transform: translateY(0); transition: transform .15s cubic-bezier(.12,.85,.25,1); }   /* опускание: резкий старт, мягкий упор */
+.shades::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: linear-gradient(90deg, transparent, #ffd899 12%, #fff3d2 50%, #ffd899 88%, transparent);
+  box-shadow: 0 -8px 22px 3px rgba(255,190,100,.85);
+}
+@media (prefers-reduced-motion: reduce) { .shades, .shades[data-state="down"] { transition: none; } }

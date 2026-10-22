@@ -623,6 +623,9 @@
   compassOn.checked = loadFlag('compass', true);
   starLabelsOn.checked = loadFlag('starLabels', true);
   starLabelsOn.addEventListener('change', () => saveFlag('starLabels', starLabelsOn.checked));
+  const shadeOn = $('shadeOn');
+  shadeOn.checked = loadFlag('sunShade', true);
+  shadeOn.addEventListener('change', () => saveFlag('sunShade', shadeOn.checked));
   const moonOn = $('moonOn'), moonFocusBtn = $('moonFocus');
   moonOn.checked = loadFlag('moon', true);
   moonFocusBtn.disabled = !moonOn.checked;
@@ -640,8 +643,9 @@
   smooth.checked = loadFlag('smooth', true);
   smooth.addEventListener('change', () => saveFlag('smooth', smooth.checked));
   always.addEventListener('change', () => saveFlag('always', always.checked));
-  // слежение за Солнцем и за Луной исключают друг друга
-  followBtn.addEventListener('click', () => { follow.checked = !follow.checked; saveFlag('follow', follow.checked); if (follow.checked) { setMoonFocus(false); setPlaneTrack(false); trackOff.yaw = trackOff.pitch = 0; } });
+  // слежение за Солнцем, Луной и самолётом исключают друг друга
+  function setSunFollow(on) { follow.checked = on; saveFlag('follow', on); if (on) { setMoonFocus(false); setPlaneTrack(false); trackOff.yaw = trackOff.pitch = 0; } }
+  followBtn.addEventListener('click', () => setSunFollow(!follow.checked));
   compassOn.addEventListener('change', () => { saveFlag('compass', compassOn.checked); applyCompass(); });
 
   // ---------- компас (пеленг по горизонтали взгляда) ----------
@@ -1141,6 +1145,69 @@
     return moonOut;
   }
 
+  // ---------- «Защита от Солнца»: тёмные очки, когда Солнце приближено слишком близко ----------
+  // Сила фильтра = (видимый размер диска Солнца в пикселях) × (Солнце в кадре) × (его не закрывают земля, дом или гора).
+  // Затемнение включается быстро (глаз слепит сразу) и отпускает медленно, как адаптация зрения.
+  const shadeEl = $('shades'), shadeChip = $('shadesChip'), shadeSw = $('shadeSwitch'), sv = new THREE.Vector3(), zero = new THREE.Vector3();
+  let candK = 0, shadeK = 0;                           // candK — насколько фильтр был бы нужен, shadeK — что реально применено (с учётом тумблера)
+  // тумблер на плашке и галочка в настройках — одно и то же значение
+  const syncShadeSwitch = () => { shadeSw.setAttribute('aria-checked', String(shadeOn.checked)); shadeChip.classList.toggle('off', !shadeOn.checked); };
+  shadeOn.addEventListener('change', syncShadeSwitch);
+  shadeSw.addEventListener('click', () => { shadeOn.checked = !shadeOn.checked; shadeOn.dispatchEvent(new Event('change')); });
+  syncShadeSwitch();
+  function updateSunShade(dt) {
+    let cand = 0;
+    if (sunWorld.y > -0.05) {
+      sv.copy(sunWorld).multiplyScalar(400).project(camera);
+      if (sv.z < 1) {
+        const edge = 1 - THREE.MathUtils.smoothstep(Math.max(Math.abs(sv.x), Math.abs(sv.y)), 1.1, 1.6);   // пока диск хоть краем в кадре, защита полная
+        const rad = 0.00465 * (innerHeight / 2) / Math.tan(camera.fov * DEG / 2);       // радиус диска Солнца на экране, px
+        // как только диск стал крупнее порога, фильтр включается сразу и сильно (60%), а дальше с зумом дотемняется до максимума
+        cand = rad >= 9 ? (0.6 + 0.4 * THREE.MathUtils.smoothstep(rad, 9, 40)) * edge : 0;
+        if (cand > 0.02) {                                                              // луч на Солнце упирается в ландшафт — света в глаза нет
+          mRay.set(zero, sunWorld);
+          if (mRay.intersectObject(landscape.root, true)[0]) cand = 0;
+        }
+      }
+    }
+    // и включается, и снимается мгновенно: фильтр показывает ровно то, что нужно в этом кадре
+    candK = cand;
+    shadeK = shadeOn.checked ? candK : 0;
+    const chipOp = THREE.MathUtils.smoothstep(candK, 0.1, 0.4);                          // плашка живёт, пока Солнце крупно в кадре, даже если защита выключена
+    shadeChip.style.opacity = chipOp.toFixed(3);
+    shadeChip.style.pointerEvents = chipOp > 0.5 ? 'auto' : 'none';
+    // визор: резко опускается, когда защита нужна, и поднимается, когда нет; сила затемнения — по размеру Солнца
+    const down = shadeK >= 0.004;
+    if (down !== visorDown) { visorDown = down; shadeEl.dataset.state = down ? 'down' : 'up'; visorSound(down); }
+    if (down) shadeEl.style.opacity = (shadeK * 0.94).toFixed(3);                        // при подъёме оставляем как есть, пока он уезжает вверх
+  }
+  // звук визора: шум с фильтром (взмах), «сервопривод» и щелчок защёлки; синтез на WebAudio, без файлов
+  let audioCtx = null, lastVisorSnd = 0, visorDown = false;
+  addEventListener('pointerdown', () => { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {} }, { once: true });
+  function visorSound(down) {
+    const now = performance.now();
+    if (!audioCtx || audioCtx.state !== 'running' || now - lastVisorSnd < 120) return;
+    lastVisorSnd = now;
+    const ctx = audioCtx, t0 = ctx.currentTime + 0.005, dur = down ? 0.17 : 0.14;
+    const noiseBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate), nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.8;
+    bp.frequency.setValueAtTime(down ? 3400 : 700, t0); bp.frequency.exponentialRampToValueAtTime(down ? 650 : 3400, t0 + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.17, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(t0);
+    const servo = ctx.createOscillator(); servo.type = 'sawtooth';                          // тонкий вой привода
+    servo.frequency.setValueAtTime(down ? 540 : 250, t0); servo.frequency.exponentialRampToValueAtTime(down ? 230 : 540, t0 + dur * 0.9);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500;
+    const sg = ctx.createGain(); sg.gain.setValueAtTime(0.0001, t0); sg.gain.exponentialRampToValueAtTime(0.035, t0 + 0.02); sg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    servo.connect(lp); lp.connect(sg); sg.connect(ctx.destination); servo.start(t0); servo.stop(t0 + dur + 0.02);
+    const tc = down ? t0 + dur * 0.92 : t0;                                                   // щелчок защёлки: в конце хода вниз, в начале хода вверх
+    const click = ctx.createOscillator(); click.type = 'square';
+    click.frequency.setValueAtTime(190, tc); click.frequency.exponentialRampToValueAtTime(70, tc + 0.035);
+    const cg = ctx.createGain(); cg.gain.setValueAtTime(0.0001, tc); cg.gain.exponentialRampToValueAtTime(0.2, tc + 0.003); cg.gain.exponentialRampToValueAtTime(0.0001, tc + 0.05);
+    click.connect(cg); cg.connect(ctx.destination); click.start(tc); click.stop(tc + 0.06);
+  }
+
   // ---------- лазерная указка: ПКМ сразу показывает расстояние до того, на что указали ----------
   let lockStart = 0;
   const mAct = $('mAct'), mDot = $('mDot'), mCard = $('mCard'), mDist = $('mDist'), mName = $('mName'), mExtra = $('mExtra');
@@ -1183,7 +1250,7 @@
       if (hit) { let o = hit.object; while (o && !o.userData.label) o = o.parent; const l = o && o.userData.label; blocked = hit.distance < d && l !== 'plane' && !FLAT_LABELS.has(l); }
       if (a < Math.max(camera.fov * DEG / innerHeight * 22, Math.atan(30 / d)) && !blocked) {
         const live = () => { const p = landscape.airport.info(); return { dist: fmtMeters(p.pos.length()), extra: planeExtra(p) }; };
-        return { name: t('mObjects').plane, ...live(), live, world: out => out.copy(landscape.airport.info().pos), action: { run: () => setPlaneTrack(!trackPlane) } };
+        return { name: t('mObjects').plane, ...live(), live, world: out => out.copy(landscape.airport.info().pos), action: { label: () => t(trackPlane ? 'mRelease' : 'mTrack'), pressed: () => trackPlane, run: () => setPlaneTrack(!trackPlane) } };
       }
     }
     if (hit) {
@@ -1195,11 +1262,13 @@
     const thr = camera.fov * DEG / innerHeight * 16, ang = v => Math.acos(Math.min(1, dir.dot(v)));
     if (moonState.on && ang(moonOut.dir) < Math.max(moonState.ang * 1.25, thr)) {
       const km = moonState.distKm;
-      return { name: t('mObjects').moon, dist: fmtKm(km), extra: '≈ ' + num((km / 6371).toFixed(1)) + ' ' + t('mEarthR') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(moonOut.dir).multiplyScalar(400) };
+      return { name: t('mObjects').moon, dist: fmtKm(km), extra: '≈ ' + num((km / 6371).toFixed(1)) + ' ' + t('mEarthR') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(moonOut.dir).multiplyScalar(400),
+        action: { label: () => t(focusMoon ? 'mRelease' : 'mTrackMoon'), pressed: () => focusMoon, run: () => setMoonFocus(!focusMoon) } };
     }
     if (ang(sunWorld) < Math.max(0.00465 * 1.4, thr)) {
       const au = Astro.sun(lastJD).distAU, km = au * 149597870.7;
-      return { name: t('mObjects').sun, dist: fmtKm(km), extra: num(au.toFixed(3)) + ' ' + t('mAU') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(sunWorld).multiplyScalar(400) };
+      return { name: t('mObjects').sun, dist: fmtKm(km), extra: num(au.toFixed(3)) + ' ' + t('mAU') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(sunWorld).multiplyScalar(400),
+        action: { label: () => t(follow.checked ? 'mRelease' : 'mTrackSun'), pressed: () => follow.checked, run: () => setSunFollow(!follow.checked) } };
     }
     let best = -1, bestScore = Infinity;
     for (let i = 0; i < N; i++) {
@@ -1223,6 +1292,7 @@
     mDot.hidden = mCard.hidden = false;
     mAct.hidden = !res.action;
     mCard.classList.toggle('has-act', !!res.action);
+    if (res.action) { mAct.textContent = res.action.label(); mAct.setAttribute('aria-pressed', String(res.action.pressed())); }
   }
   function hideMeasure() { measure = null; mDot.hidden = mCard.hidden = true; }
   // цель следует за точкой в мире: небо вращается, камера двигается — красная точка и карточка едут вместе
@@ -1278,9 +1348,11 @@
       const v = measure.live();
       if (mDist.textContent !== v.dist) mDist.textContent = v.dist;
       if (mExtra.textContent !== v.extra) mExtra.textContent = v.extra;
-      const lbl = t(trackPlane ? 'mRelease' : 'mTrack');
+    }
+    if (measure.action) {                                // подпись и подсветка кнопки следуют за состоянием слежения
+      const lbl = measure.action.label();
       if (mAct.textContent !== lbl) mAct.textContent = lbl;
-      mAct.setAttribute('aria-pressed', String(trackPlane));
+      mAct.setAttribute('aria-pressed', String(measure.action.pressed()));
     }
     measure.world(mV).project(camera);
     if (mV.z >= 1 || Math.abs(mV.x) > 1.05 || Math.abs(mV.y) > 1.05) { mDot.style.visibility = mCard.style.visibility = 'hidden'; return; }
@@ -1387,6 +1459,7 @@
     updatePointer(s.dir, alt);
     drawCompass((Math.PI - yaw) / DEG, ((sunAz / DEG) + 360) % 360, alt);
     renderer.render(scene, camera);
+    updateSunShade(dt);
     updateMeasure();
     drawStarLabels(starMat.uniforms.uNight.value);
 
