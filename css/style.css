@@ -599,7 +599,8 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
 /* ---------- ускорение времени: круглый бегунок на нижнем краю кнопки «Идёт время», внутри него текущая скорость ---------- */
 .ticks { display: none; }
 .speedhead { justify-content: flex-end; }
-.play-wrap { position: relative; flex: 1 1 auto; min-width: 0; margin-bottom: 12px; }
+.play-wrap { position: relative; flex: 1 1 auto; min-width: 0; }
+.play-row { padding-bottom: 12px; }                 /* место под бегунок скорости, который выступает за нижний край; отступ у строки, а не у кнопки, чтобы шестерёнка не вытягивалась */
 .play-wrap #pause { width: 100%; }
 /* сам input невидим и занимает полосу 28 px по нижнему краю: за него тянем; нарисованный бегунок — отдельный элемент ниже */
 .play-wrap #speed {
