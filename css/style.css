@@ -558,7 +558,7 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
 .m-act[hidden] { display: none; }
 
 /* ---------- версия и история изменений ---------- */
-.speedbar { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+.speedbar { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); padding-top: 8px; }   /* ползунка внизу больше нет, пустого места под текстом не оставляем; кнопка версии справа в своём углу */
 .ver-btn {
   position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 30;
   padding: 5px 12px; font: 600 11.5px var(--f-num); letter-spacing: .02em; color: var(--ink-dim);
@@ -620,3 +620,7 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
   transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
 }
 .play-wrap:hover .speed-knob, .play-wrap #speed:active + .speed-knob { transform: translateX(-50%) scale(1.12); border-color: #ffd98f; box-shadow: 0 0 0 4px rgba(255,196,107,.22), 0 4px 12px rgba(0,0,0,.5); }
+
+/* вес, длина суток и световой день — в левом нижнем углу */
+.speedhead { justify-content: flex-start; }
+.daylen { text-align: left; }

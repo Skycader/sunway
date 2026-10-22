@@ -391,7 +391,7 @@
     let day;
     if (dh === 0) day = t('polarNight');
     else if (dh === 24) day = t('polarDay');
-    else day = t('daylightIn')(fmtDur(dh * 3600 / mult));
+    else day = t('daylightIn')(fmtDur(dh * 3600 / mult)) + ' (' + Math.round(dh / 24 * 100) + '%)';   // доля светлой части суток
     return t('dayIn')(fmtDur(86400 / mult)) + '\n' + day;
   }
   const speedKnob = $('speedKnob');
