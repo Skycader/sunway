@@ -603,18 +603,14 @@
     applyZoom();
     const ty = Math.tan(camera.fov * DEG / 2);
     zC.set(nx * ty * camera.aspect, ny * ty, -1).normalize();
+    if (follow.checked || focusMoon || trackPlane) { updDaylen(); return; }   // при слежении цель держится по центру: зум без сдвига, иначе камера раскачивается
     // Ry(yaw)·Rx(pitch)·c = d: высота d не зависит от yaw → находим pitch, потом yaw
     const R = Math.hypot(zC.y, zC.z), phi = Math.atan2(zC.z, zC.y), a = Math.acos(Math.max(-1, Math.min(1, zD.y / R)));
     const cands = [a - phi, -a - phi].map(p => Math.atan2(Math.sin(p), Math.cos(p)));
     let p = Math.abs(cands[0] - pitch) <= Math.abs(cands[1] - pitch) ? cands[0] : cands[1];
     p = Math.max(-1.4, Math.min(1.5, p));
     zV.copy(zC).applyAxisAngle(new THREE.Vector3(1, 0, 0), p);
-    let y = Math.atan2(zD.x, zD.z) - Math.atan2(zV.x, zV.z);
-    if (follow.checked || focusMoon || trackPlane) {           // при слежении смещаем угол обзора, а не саму камеру
-      let dy = y - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-      trackOff.yaw = Math.max(-OFF_YAW, Math.min(OFF_YAW, trackOff.yaw + dy));
-      trackOff.pitch = Math.max(-OFF_PITCH, Math.min(OFF_PITCH, trackOff.pitch + p - pitch));
-    } else { yaw = y; pitch = p; focusing = false; }
+    yaw = Math.atan2(zD.x, zD.z) - Math.atan2(zV.x, zV.z); pitch = p; focusing = false;
     camera.rotation.y = yaw; camera.rotation.x = pitch; camera.updateMatrixWorld();
     updDaylen();
   }
