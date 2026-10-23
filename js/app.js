@@ -1475,6 +1475,9 @@
   const rmbEnd = e => { if (rmb && e.button !== 0) { rmb = null; canvas.classList.remove('zooming'); } };
   canvas.addEventListener('pointerup', rmbEnd);
   canvas.addEventListener('pointercancel', rmbEnd);
+  // отпустили ПКМ после зума над другим элементом (панель, за краем окна) — браузер открыл бы своё меню: гасим его
+  addEventListener('contextmenu', e => { if (rmbMoved) { e.preventDefault(); e.stopPropagation(); rmbMoved = false; } }, true);
+  addEventListener('blur', () => { rmb = null; canvas.classList.remove('zooming'); });
   canvas.addEventListener('contextmenu', e => {
     e.preventDefault();
     if (rmbMoved) { rmbMoved = false; return; }
