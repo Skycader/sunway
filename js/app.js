@@ -593,11 +593,34 @@
   }
   bindDrag(canvas, 1, false);
   bindDrag($('compass'), COMPASS_GAIN, true);
+  // зум к курсору: точка неба под курсором остаётся под ним (поворачиваем камеру на разницу)
+  const zD = new THREE.Vector3(), zC = new THREE.Vector3(), zV = new THREE.Vector3();
+  function zoomAt(newZoom, cx, cy) {
+    const nx = cx / innerWidth * 2 - 1, ny = 1 - cy / innerHeight * 2;
+    const ndc = camera.fov * DEG;
+    zD.set(nx * Math.tan(ndc / 2) * camera.aspect, ny * Math.tan(ndc / 2), -1).applyQuaternion(camera.quaternion).normalize();
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    applyZoom();
+    const ty = Math.tan(camera.fov * DEG / 2);
+    zC.set(nx * ty * camera.aspect, ny * ty, -1).normalize();
+    // Ry(yaw)·Rx(pitch)·c = d: высота d не зависит от yaw → находим pitch, потом yaw
+    const R = Math.hypot(zC.y, zC.z), phi = Math.atan2(zC.z, zC.y), a = Math.acos(Math.max(-1, Math.min(1, zD.y / R)));
+    const cands = [a - phi, -a - phi].map(p => Math.atan2(Math.sin(p), Math.cos(p)));
+    let p = Math.abs(cands[0] - pitch) <= Math.abs(cands[1] - pitch) ? cands[0] : cands[1];
+    p = Math.max(-1.4, Math.min(1.5, p));
+    zV.copy(zC).applyAxisAngle(new THREE.Vector3(1, 0, 0), p);
+    let y = Math.atan2(zD.x, zD.z) - Math.atan2(zV.x, zV.z);
+    if (follow.checked || focusMoon || trackPlane) {           // при слежении смещаем угол обзора, а не саму камеру
+      let dy = y - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      trackOff.yaw = Math.max(-OFF_YAW, Math.min(OFF_YAW, trackOff.yaw + dy));
+      trackOff.pitch = Math.max(-OFF_PITCH, Math.min(OFF_PITCH, trackOff.pitch + p - pitch));
+    } else { yaw = y; pitch = p; focusing = false; }
+    camera.rotation.y = yaw; camera.rotation.x = pitch; camera.updateMatrixWorld();
+    updDaylen();
+  }
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * Math.exp(-e.deltaY * 0.0015)));
-    applyZoom();
-    updDaylen();
+    zoomAt(zoom * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
   }, { passive: false });
 
   // стороны света
@@ -1432,7 +1455,31 @@
     const cx = x + 18 + w > innerWidth - 8 ? x - 18 - w : x + 18, cy = y + 16 + h > innerHeight - 8 ? y - 16 - h : y + 16;
     mCard.style.transform = `translate(${Math.max(8, cx)}px, ${Math.max(8, cy)}px)`;
   }
-  canvas.addEventListener('contextmenu', e => { e.preventDefault(); showMeasure(pickTarget(e.clientX, e.clientY)); });
+  // ПКМ зажата + движение вверх-вниз = зум (вниз — отдаление, вверх — приближение); простой клик ПКМ по-прежнему показывает указку
+  const rmbZoomOn = $('rmbZoomOn');
+  rmbZoomOn.checked = loadFlag('rmbZoom', true);
+  rmbZoomOn.addEventListener('change', () => saveFlag('rmbZoom', rmbZoomOn.checked));
+  let rmb = null, rmbMoved = false;
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 2 || !rmbZoomOn.checked) return;
+    rmb = { x: e.clientX, y: e.clientY, y0: e.clientY, id: e.pointerId }; rmbMoved = false;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!rmb || !(e.buttons & 2)) return;
+    if (!rmbMoved && Math.abs(e.clientY - rmb.y0) < 4) return;
+    if (!rmbMoved) { rmbMoved = true; canvas.classList.add('zooming'); hideMeasure && hideMeasure(); }
+    zoomAt(zoom * Math.exp(-(e.clientY - rmb.y) * 0.006), rmb.x, rmb.y0);    // якорь — точка, где нажали ПКМ
+    rmb.y = e.clientY;
+  });
+  const rmbEnd = e => { if (rmb && e.button !== 0) { rmb = null; canvas.classList.remove('zooming'); } };
+  canvas.addEventListener('pointerup', rmbEnd);
+  canvas.addEventListener('pointercancel', rmbEnd);
+  canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (rmbMoved) { rmbMoved = false; return; }
+    showMeasure(pickTarget(e.clientX, e.clientY));
+  });
   mAct.addEventListener('click', () => { if (measure && measure.action) { measure.action.run(); hideMeasure(); } });   // после «Следить» плашка уходит, остаётся рамка захвата
   document.addEventListener('pointerdown', e => { if (e.button === 0 && !mCard.contains(e.target)) hideMeasure(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMeasure(); });
