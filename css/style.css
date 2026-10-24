@@ -699,3 +699,7 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
 
 .settings-pop .checklist::-webkit-scrollbar { width: 8px; }
 .settings-pop .checklist::-webkit-scrollbar-track, .settings-pop .checklist::-webkit-scrollbar-thumb { border-radius: 4px; }
+
+/* монохромные значки перед названиями настроек: приглушённые, светлеют при включении */
+.check .ico-set { width: 16px; height: 16px; flex: none; stroke-width: 1.6; color: var(--ink-dim); transition: color .15s; }
+.check:hover .ico-set, .check:has(input:checked) .ico-set { color: var(--ink); }
