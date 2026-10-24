@@ -298,12 +298,16 @@
   const DAY = 864e5;
   const mod = (v, m) => ((v % m) + m) % m;
   const _now = new Date();
-  let doy = Math.min(364, Math.round((Date.UTC(simYear, _now.getUTCMonth(), _now.getUTCDate()) - YEAR0) / DAY));
-  let todUtc = mod(Date.now(), DAY);
-  let simTime = YEAR0 + doy * DAY + todUtc;
-  const setSim = () => { simTime = YEAR0 + doy * DAY + todUtc; };
+  // дата (doy) и время суток (todLoc) — МЕСТНЫЕ в поясе наблюдателя; в UTC (simTime) их переводит setSim.
+  // Так полночь и смена даты бывают там же, где на часах наблюдателя, и ползунок времени не перескакивает на сутки.
   let target = 1, speed = 1, paused = false;
   const observer = { lat: 50, lon: Math.max(-180, Math.min(180, -new Date().getTimezoneOffset() / 4)) };
+  const zoneH = () => Math.round(observer.lon / 15);
+  const _loc = new Date(Date.now() + zoneH() * 3.6e6);
+  let doy = Math.min(364, Math.round((Date.UTC(simYear, _loc.getUTCMonth(), _loc.getUTCDate()) - YEAR0) / DAY));
+  let todLoc = mod(Date.now() + zoneH() * 3.6e6, DAY), lastZone = zoneH();
+  let simTime = YEAR0 + doy * DAY + todLoc - zoneH() * 3.6e6;
+  const setSim = () => { simTime = YEAR0 + doy * DAY + todLoc - lastZone * 3.6e6; };
 
   const MAX_EXP = 4;
   let fmtNum, fmtTime, fmtDay;
@@ -426,9 +430,8 @@
   // ---------- время суток (местное, пояс по долготе) ----------
   const todIn = $('tod');
   let todActive = false;
-  const zoneH = () => Math.round(observer.lon / 15);
   todIn.addEventListener('input', () => {
-    todUtc = mod(+todIn.value * 60000 - zoneH() * 3.6e6, DAY);
+    todLoc = mod(+todIn.value * 60000, DAY);
     setSim();
   });
   todIn.addEventListener('pointerdown', () => { todActive = true; });
@@ -463,7 +466,7 @@
   doyIn.value = doy;
   function syncDoy() {
     const decl = solar(simTime).dec / DEG;
-    $('doyLabel').textContent = fmtDay.format(new Date(simTime));
+    $('doyLabel').textContent = fmtDay.format(new Date(YEAR0 + doy * DAY));
     const dl = $('declLabel');
     dl.textContent = 'δ ' + (decl >= 0 ? '+' : '−') + num(Math.abs(decl).toFixed(1)) + '°';
     dl.dataset.tip = t('declTip');
@@ -533,11 +536,28 @@
   });
   // смена года: месяц и число остаются, меняется только год (и фаза Луны)
   function setYear(y) {
-    const d = new Date(simTime);
+    const d = new Date(YEAR0 + doy * DAY);
     simYear = y; YEAR0 = Date.UTC(y, 0, 1);
     doy = Math.max(0, Math.min(364, Math.round((Date.UTC(y, d.getUTCMonth(), d.getUTCDate()) - YEAR0) / DAY)));
     doyIn.value = doy;
     setSim(); syncDoy(); updDaylen();
+  }
+  // выставить дату и местное время по моменту UTC (мс) в поясе наблюдателя
+  function setFromUtc(ms) {
+    lastZone = zoneH();
+    const loc = ms + lastZone * 3.6e6, d = new Date(loc), y = d.getUTCFullYear();
+    if (y >= 1900 && y <= 2100 && y !== simYear) { simYear = y; YEAR0 = Date.UTC(y, 0, 1); yearMenu.refresh(); }
+    doy = Math.max(0, Math.min(364, Math.round((Date.UTC(simYear, d.getUTCMonth(), d.getUTCDate()) - YEAR0) / DAY)));
+    todLoc = mod(loc, DAY);
+    doyIn.value = doy; setSim(); syncDoy(); updDaylen(); yearMenu.refresh();
+  }
+  // сдвиг местной даты на n суток (переход через местную полночь), в том числе через границу года
+  function shiftDay(n) {
+    const d = new Date(YEAR0 + (doy + n) * DAY), y = d.getUTCFullYear();
+    if (y < 1900 || y > 2100) return;
+    if (y !== simYear) { simYear = y; YEAR0 = Date.UTC(y, 0, 1); yearMenu.refresh(); }
+    doy = Math.max(0, Math.min(364, Math.round((Date.UTC(y, d.getUTCMonth(), d.getUTCDate()) - YEAR0) / DAY)));
+    doyIn.value = doy; syncDoy(); updDaylen();
   }
   function placeMonths() {
     const w = doyIn.clientWidth, thumb = 16;
@@ -919,18 +939,40 @@
   const yearMenu = initYearMenu({ get: () => simYear, set: setYear });
   // «Сейчас»: настоящие год, дата и время суток (скорость и пауза остаются как были)
   $('nowBtn').addEventListener('click', () => {
-    const n = new Date();
-    simYear = n.getUTCFullYear(); YEAR0 = Date.UTC(simYear, 0, 1);
-    doy = Math.min(364, Math.round((Date.UTC(simYear, n.getUTCMonth(), n.getUTCDate()) - YEAR0) / DAY));
-    todUtc = mod(Date.now(), DAY);
-    doyIn.value = doy;
-    setSim(); syncDoy(); updDaylen(); yearMenu.refresh();
+    setFromUtc(Date.now());
   });
   obsMenu = initObservatoryMenu({
     coords: () => observer,
     pick(i) { observerSite = i; observer.lat = OBSERVATORIES[i].lat; observer.lon = OBSERVATORIES[i].lon; placeObserver(); },
   });
   obsMenu.select(observerSite);
+
+  // ---------- состояние в адресной строке: место, взгляд, зум, дата и время (#lat=…&lon=…&yaw=…&pitch=…&z=…&t=…) ----------
+  // Восстанавливаем при загрузке и обновляем несколько раз в секунду (replaceState: история браузера не засоряется).
+  (function restoreHash() {
+    const q = new URLSearchParams(location.hash.slice(1)), num = k => (q.has(k) && isFinite(+q.get(k))) ? +q.get(k) : null;
+    const lat = num('lat'), lon = num('lon'), site = num('site'), yw = num('yaw'), pt = num('pitch'), z = num('z'), t = num('t');
+    if (lat !== null && lon !== null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      observer.lat = lat; observer.lon = lon;
+      observerSite = site !== null && OBSERVATORIES[site] && OBSERVATORIES[site].lat === lat && OBSERVATORIES[site].lon === lon ? site : -1;
+      placeObserver();
+    }
+    if (yw !== null) yaw = yw * DEG;
+    if (pt !== null) pitch = Math.max(-1.4, Math.min(1.5, pt * DEG));
+    if (z !== null) { zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)); applyZoom(); }
+    if (t !== null) setFromUtc(t);
+  })();
+  let hashTick = 0, lastHash = '';
+  function saveHash(now) {
+    if (now - hashTick < 400) return;
+    hashTick = now;
+    const r = (v, d) => +v.toFixed(d);
+    const h = '#lat=' + r(observer.lat, 4) + '&lon=' + r(observer.lon, 4) + (observerSite >= 0 ? '&site=' + observerSite : '') +
+      '&yaw=' + r(yaw / DEG, 1) + '&pitch=' + r(pitch / DEG, 1) + '&z=' + r(zoom, 2) + '&t=' + Math.round(simTime);
+    if (h === lastHash) return;
+    lastHash = h;
+    try { history.replaceState(null, '', h); } catch (e) {}
+  }
 
   // солнце мини-модели
   function glowTexture(stops) {
@@ -1504,7 +1546,12 @@
     const rate = lt > ls ? 9 : 3;
     speed = Math.exp(ls + (lt - ls) * (1 - Math.exp(-dt * rate)));
     if (!smooth.checked || Math.abs(target - speed) / target < 0.002) speed = target;
-    if (!paused) todUtc = mod(todUtc + dt * 1000 * speed, DAY);
+    if (!paused) {
+      const raw = todLoc + dt * 1000 * speed, carry = Math.floor(raw / DAY);
+      todLoc = mod(raw, DAY);
+      if (carry) shiftDay(carry);                       // местная полночь: дата идёт дальше
+    }
+    if (zoneH() !== lastZone) setFromUtc(YEAR0 + doy * DAY + todLoc - lastZone * 3.6e6);   // другой пояс (смена наблюдателя): тот же момент времени, часы другие
     setSim();
 
     const sol = solar(simTime);
@@ -1588,7 +1635,7 @@
       hudTick = now;
       // местное время наблюдателя: пояс по долготе (15° = 1 час)
       const zone = zoneH();
-      const local = mod(todUtc + zone * 3.6e6, DAY);
+      const local = todLoc;
       $('clock').textContent = fmtTime.format(new Date(local));
       if (!todActive) todIn.value = Math.floor(local / 60000);
       paintTodTrack(sol);
@@ -1611,6 +1658,7 @@
       const shown = speed < 9.95 ? num(speed.toFixed(1).replace('.0', '')) : fmtNum.format(Math.round(speed));
       speedKnob.textContent = '×' + shown;               // текущая скорость живёт прямо в бегунке под кнопкой
     }
+    saveHash(now);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
