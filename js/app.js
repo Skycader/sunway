@@ -1419,7 +1419,36 @@
       lonName: d => (d / 15) + (I18N.lang === 'ru' ? 'ч' : 'h'), latName: d => (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d) + '°' }),
   ];
   const grF = new THREE.Vector3(), grP = new THREE.Vector3(), grW = new THREE.Vector3(), grInv = new THREE.Matrix4();
-  function updateGrids() { for (const g of grids) g.lines.visible = g.bold.visible = g.on.checked; }
+  // те же сетки на мини-карте: «клетка» вокруг Земли. Азимутальная — сфера вокруг Земли, ориентированная по наблюдателю (линии сходятся в его зените и надире),
+  // экваториальная — сфера вокруг Земли в системе звёзд (линии сходятся на небесных полюсах, Земля вращается внутри)
+  function miniGrid(vec, lonStep, latStep, latMin, latMax, color, opacity, R) {
+    const arr = [], v = (lo, la) => vec(lo * DEG, la * DEG).multiplyScalar(R);
+    const push = (p, q) => arr.push(p.x, p.y, p.z, q.x, q.y, q.z);
+    for (let la = latMin; la <= latMax; la += latStep) for (let lo = 0; lo < 360; lo += 5) push(v(lo, la), v(lo + 5, la));
+    for (let lo = 0; lo < 360; lo += lonStep) for (let la = latMin; la < latMax; la += 5) push(v(lo, la), v(lo, la + 5));
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arr), 3));
+    const m = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+    m.frustumCulled = false; m.visible = false;
+    return m;
+  }
+  const miniAz = miniGrid((lo, la) => new THREE.Vector3(Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)), 15, 15, -75, 75, 0xffffff, 0.5, 1.22);
+  miniAz.matrixAutoUpdate = false; earth.add(miniAz);
+  const miniEq = miniGrid(grids[1].o.vec, 30, 15, -75, 75, 0xf9bd5c, 0.45, 1.45 / 0.28);
+  gStars.add(miniEq);
+  const mgUp = new THREE.Vector3(), mgEast = new THREE.Vector3(), mgNorth = new THREE.Vector3();
+  function updateGrids() {
+    for (const g of grids) g.lines.visible = g.bold.visible = g.on.checked;
+    miniAz.visible = grids[0].on.checked; miniEq.visible = grids[1].on.checked;
+    if (miniAz.visible) {
+      const la = observer.lat * DEG, lo = observer.lon * DEG;
+      mgUp.set(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo));
+      mgEast.set(-Math.sin(lo), 0, -Math.cos(lo));
+      mgNorth.crossVectors(mgUp, mgEast);
+      miniAz.matrix.makeBasis(mgEast, mgUp, mgNorth);
+      miniAz.matrixWorldNeedsUpdate = true;
+    }
+  }
   function drawGrids() {
     if (!grids.some(g => g.on.checked)) return;
     const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight, c = lctx;
