@@ -1283,7 +1283,7 @@
         vec3 t = normalize((modelViewMatrix * vec4(aDir, 0.0)).xyz);
         vec3 s = normalize(cross(t, vec3(0.0, 0.0, 1.0)));
         mv.xyz += s * aSide * 1.6 * uPx * max(-mv.z, 1.0);
-        vA = smoothstep(0.0, 0.07, aT) * smoothstep(1.0, 0.93, aT) * (position.y > 0.0 ? 1.0 : 0.3);
+        vA = smoothstep(0.0, 0.02, aT) * smoothstep(1.0, 0.98, aT) * (position.y > 0.0 ? 1.0 : 0.3);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: `uniform vec3 uColor; varying float vA; void main(){ gl_FragColor = vec4(uColor, vA * 0.8); }`,
@@ -1316,6 +1316,7 @@
     const g = P.geo;
     g.setAttribute('position', new THREE.BufferAttribute(pa, 3)); g.setAttribute('aDir', new THREE.BufferAttribute(da, 3));
     g.setAttribute('aSide', new THREE.BufferAttribute(sa, 1)); g.setAttribute('aT', new THREE.BufferAttribute(ta, 1)); g.setIndex(idx);
+    P.ends = [new THREE.Vector3(pos[0], pos[1], pos[2]), new THREE.Vector3(pos[(n - 1) * 3], pos[(n - 1) * 3 + 1], pos[(n - 1) * 3 + 2])];
     P.marks = [];                                                 // отметки по целым местным часам
     const z = zoneH() * HOUR;
     for (let ms = Math.ceil((t0 + z) / HOUR) * HOUR - z; ms <= P.center + 12 * HOUR; ms += HOUR) {
@@ -1334,7 +1335,28 @@
     }
   }
   const pathP = new THREE.Vector3();
+  // значки «?» на концах дуги Луны, где она не замыкается: при наведении объясняют, почему разрыв
+  const gapIcons = [0, 1].map(() => {
+    const el = document.createElement('div');
+    el.className = 'path-info'; el.textContent = '?'; el.hidden = true;
+    labels.after(el);                                        // сразу за слоем подписей: панели интерфейса лежат поверх
+    return el;
+  });
+  function drawGapIcons() {
+    const P = skyPaths[1], W = innerWidth, H = innerHeight;
+    gapIcons.forEach((el, i) => {
+      let vis = false;
+      if (P.on && P.ends) {
+        pathP.copy(P.ends[i]).project(camera);
+        vis = pathP.z < 1 && P.ends[i].y > 0 && Math.abs(pathP.x) < 1 && Math.abs(pathP.y) < 1;
+        if (vis) el.style.transform = `translate(${(pathP.x + 1) / 2 * W - 10}px, ${(1 - pathP.y) / 2 * H - 10}px)`;
+      }
+      if (el.hidden === vis) el.hidden = !vis;
+      if (vis) el.dataset.tip = t('pathGapTip');
+    });
+  }
   function drawPaths() {
+    drawGapIcons();
     if (!skyPaths.some(P => P.on)) return;
     const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight, c = lctx;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
