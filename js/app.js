@@ -1089,6 +1089,45 @@
     sunGlow.position.copy(sunW).multiplyScalar(SUN_DIST);
   }
 
+  // лазерная указка на мини-карте: если луч ушёл в космос (Луна, Солнце, звезда, просто небо), рисуем его отрезок от наблюдателя
+  const miniLaserOn = $('miniLaser');
+  miniLaserOn.checked = loadFlag('miniLaser', false);
+  miniLaserOn.addEventListener('change', () => saveFlag('miniLaser', miniLaserOn.checked));
+  const mlGeo = new THREE.BufferGeometry();
+  mlGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  mlGeo.getAttribute('position').setUsage(THREE.DynamicDrawUsage);
+  const mlLine = new THREE.Line(mlGeo, new THREE.LineBasicMaterial({ color: 0xff4a3a, transparent: true, opacity: 0.95, depthTest: false }));
+  const mlEndGeo = new THREE.BufferGeometry();
+  mlEndGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+  mlEndGeo.getAttribute('position').setUsage(THREE.DynamicDrawUsage);
+  const mlEnd = new THREE.Points(mlEndGeo, new THREE.PointsMaterial({ color: 0xff7a62, size: 7, sizeAttenuation: false, depthTest: false, transparent: true }));
+  mlLine.frustumCulled = mlEnd.frustumCulled = false; mlLine.renderOrder = mlEnd.renderOrder = 10; mlLine.visible = mlEnd.visible = false;
+  gScene.add(mlLine, mlEnd);
+  const mlA = new THREE.Vector3(), mlB = new THREE.Vector3(), mlUp = new THREE.Vector3(), mlE = new THREE.Vector3(), mlN = new THREE.Vector3(), mlW = new THREE.Vector3();
+  function updateMiniLaser() {
+    const show = miniLaserOn.checked && measure && measure.space;
+    mlLine.visible = mlEnd.visible = !!show;
+    if (!show) return;
+    obsGroup.updateWorldMatrix(true, false);
+    obsGroup.getWorldPosition(mlA);                                     // начало: наблюдатель на глобусе
+    if (measure.space === 'moon') { gMoon.updateWorldMatrix(true, false); gMoon.getWorldPosition(mlB); }
+    else if (measure.space === 'sun') mlB.copy(sunGlow.position);
+    else {                                                              // звезда или небо: направление из мировых осей неба в оси Земли
+      measure.world(mlW).normalize();
+      const la = observer.lat * DEG, lo = observer.lon * DEG;
+      mlUp.set(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo));
+      mlE.set(-Math.sin(lo), 0, -Math.cos(lo)); mlN.crossVectors(mlUp, mlE);
+      mlB.set(0, 0, 0).addScaledVector(mlE, -mlW.x).addScaledVector(mlUp, mlW.y).addScaledVector(mlN, mlW.z);   // мир: −X восток, +Z север
+      earth.updateWorldMatrix(true, false);
+      mlB.transformDirection(earth.matrixWorld).multiplyScalar(60).add(mlA);
+    }
+    const p = mlGeo.getAttribute('position').array;
+    p[0] = mlA.x; p[1] = mlA.y; p[2] = mlA.z; p[3] = mlB.x; p[4] = mlB.y; p[5] = mlB.z;
+    mlGeo.getAttribute('position').needsUpdate = true;
+    const e = mlEndGeo.getAttribute('position').array; e[0] = mlB.x; e[1] = mlB.y; e[2] = mlB.z;
+    mlEndGeo.getAttribute('position').needsUpdate = true;
+  }
+
   // метка «Солнце» у края мини-карты, когда далёкое солнце вне кадра
   const gsun = $('gsun'), gsunArrow = gsun.firstChild;
   const gd = new THREE.Vector3(), gp = new THREE.Vector3();
@@ -1608,12 +1647,12 @@
     const thr = camera.fov * DEG / innerHeight * 16, ang = v => Math.acos(Math.min(1, dir.dot(v)));
     if (moonState.on && ang(moonOut.dir) < Math.max(moonState.ang * 1.25, thr)) {
       const km = moonState.distKm;
-      return { name: t('mObjects').moon, dist: fmtKm(km), extra: '≈ ' + num((km / 6371).toFixed(1)) + ' ' + t('mEarthR') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(moonOut.dir).multiplyScalar(400),
+      return { name: t('mObjects').moon, dist: fmtKm(km), extra: '≈ ' + num((km / 6371).toFixed(1)) + ' ' + t('mEarthR') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), space: 'moon', world: out => out.copy(moonOut.dir).multiplyScalar(400),
         action: { label: () => t(focusMoon ? 'mRelease' : 'mTrackMoon'), pressed: () => focusMoon, run: () => setMoonFocus(!focusMoon) } };
     }
     if (ang(sunWorld) < Math.max(0.00465 * 1.4, thr)) {
       const au = Astro.sun(lastJD).distAU, km = au * 149597870.7;
-      return { name: t('mObjects').sun, dist: fmtKm(km), extra: num(au.toFixed(3)) + ' ' + t('mAU') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), world: out => out.copy(sunWorld).multiplyScalar(400),
+      return { name: t('mObjects').sun, dist: fmtKm(km), extra: num(au.toFixed(3)) + ' ' + t('mAU') + ' · ' + t('mLight') + ' ' + fmtLight(km / 299792.458), space: 'sun', world: out => out.copy(sunWorld).multiplyScalar(400),
         action: { label: () => t(follow.checked ? 'mRelease' : 'mTrackSun'), pressed: () => follow.checked, run: () => setSunFollow(!follow.checked) } };
     }
     let best = -1, bestScore = Infinity;
@@ -1627,10 +1666,10 @@
       const name = info ? info[I18N.lang === 'ru' ? 2 : 1] : t('mObjects').star;
       const extra = t('mMag') + ' ' + num(starMag[i].toFixed(1)) + 'm' + (ly ? ' · ' + t('mLight') + ' ' + grp(ly) + ' ' + yearsWord(Math.round(ly)) : '');
       return { name, dist: ly ? (ly < 10 ? num(ly.toFixed(1)) : grp(ly)) + ' ' + t('lyUnit') : '—', extra: ly ? '≈ ' + fmtKm(ly * LY_KM) + ' · ' + extra : t('mNoData') + ' · ' + extra,
-        world: out => out.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld) };
+        space: 'dir', world: out => out.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).applyMatrix4(spin.matrixWorld) };
     }
     const d = dir.clone();
-    return { name: t('mObjects').none, dist: '—', extra: '', world: out => out.copy(d).multiplyScalar(400) };
+    return { name: t('mObjects').none, dist: '—', extra: '', space: 'dir', world: out => out.copy(d).multiplyScalar(400) };
   }
   function showMeasure(res) {
     measure = res;
@@ -1738,7 +1777,8 @@
     showMeasure(pickTarget(e.clientX, e.clientY));
   });
   mAct.addEventListener('click', () => { if (measure && measure.action) { measure.action.run(); hideMeasure(); } });   // после «Следить» плашка уходит, остаётся рамка захвата
-  document.addEventListener('pointerdown', e => { if (e.button === 0 && !mCard.contains(e.target)) hideMeasure(); });
+  // ЛКМ на мини-карте (крутим глобус) указку не сбрасывает: на ней как раз смотрят луч
+  document.addEventListener('pointerdown', e => { if (e.button === 0 && !mCard.contains(e.target) && !(e.target.closest && e.target.closest('.globe-wrap'))) hideMeasure(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMeasure(); });
 
   let hudTick = 0;
@@ -1847,6 +1887,7 @@
     drawGrids();
 
     updateGlobe(sol);
+    updateMiniLaser();
     gRenderer.render(gScene, gCam);
     updateGlobeSunMark();
     updateGlobeMoonMark();
