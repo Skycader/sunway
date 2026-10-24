@@ -1197,11 +1197,18 @@
     placeObserver();
   }
   let gDrag = null;
+  gCanvas.addEventListener('contextmenu', e => e.preventDefault());                     // ПКМ на мини-карте: без меню «Сохранить изображение»
+  gCanvas.parentElement.addEventListener('contextmenu', e => e.preventDefault());
   gCanvas.addEventListener('pointerdown', e => {
-    const p = hitEarth(e);
-    gCanvas.setPointerCapture(e.pointerId);
-    if (p) { gDrag = { mode: 'move' }; moveObserverTo(p); }
-    else { gDrag = { mode: 'orbit', x: e.clientX, y: e.clientY, theta: orb.theta, phi: orb.phi }; gCanvas.classList.add('drag'); }
+    if (e.button === 0) {                                                               // ЛКМ: перенос наблюдателя, только если нажали на саму Землю
+      const p = hitEarth(e);
+      gCanvas.setPointerCapture(e.pointerId);
+      if (p) { gDrag = { mode: 'move' }; moveObserverTo(p); }
+      else { gDrag = { mode: 'orbit', x: e.clientX, y: e.clientY, theta: orb.theta, phi: orb.phi }; gCanvas.classList.add('drag'); }   // мимо Земли ЛКМ — облёт камеры
+    } else if (e.button === 2) {                                                        // ПКМ: облёт камеры мини-карты (в любом месте)
+      gCanvas.setPointerCapture(e.pointerId);
+      gDrag = { mode: 'orbit', x: e.clientX, y: e.clientY, theta: orb.theta, phi: orb.phi }; gCanvas.classList.add('drag');
+    }
   });
   gCanvas.addEventListener('pointermove', e => {
     if (!gDrag) { gCanvas.classList.toggle('over-earth', !!hitEarth(e)); return; }
@@ -1777,7 +1784,7 @@
     showMeasure(pickTarget(e.clientX, e.clientY));
   });
   mAct.addEventListener('click', () => { if (measure && measure.action) { measure.action.run(); hideMeasure(); } });   // после «Следить» плашка уходит, остаётся рамка захвата
-  // ЛКМ на мини-карте (крутим глобус) указку не сбрасывает: на ней как раз смотрят луч
+  // нажатия на мини-карте (ЛКМ по Земле, ПКМ — облёт) указку не сбрасывают: на ней как раз смотрят луч
   document.addEventListener('pointerdown', e => { if (e.button === 0 && !mCard.contains(e.target) && !(e.target.closest && e.target.closest('.globe-wrap'))) hideMeasure(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMeasure(); });
 
