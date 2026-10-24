@@ -476,6 +476,7 @@ button#pause:not(.paused) .orb { filter: drop-shadow(0 1px 1px rgba(120,60,0,.55
   background: linear-gradient(180deg, #f9bd5c, #e8901f); color: #fff; text-shadow: 0 1px 2px rgba(120,60,0,.55);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 0 10px rgba(255,196,107,.3);
 }
+.seg.two { grid-template-columns: repeat(2, 1fr); margin-top: 6px; }
 .seg button:disabled { opacity: .4; cursor: default; pointer-events: none; }
 .seg .ico-sm { color: currentColor; }
 .seg button[aria-pressed="true"] .ico-sm { color: #fff; }

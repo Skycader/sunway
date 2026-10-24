@@ -1261,6 +1261,103 @@
     return moonOut;
   }
 
+
+  // ---------- путь Солнца и Луны по небу: лента ±12 часов вокруг текущего момента + часовые отметки ----------
+  const PATH_R = 985, HOUR = 3.6e6, yAxisV = new THREE.Vector3(0, 1, 0);
+  const pathTv = new THREE.Vector3();
+  function pathAt(kind, ms, out) {                               // направление на тело в мировых осях (+Y — зенит) в момент ms
+    const sol = solar(ms), sk = skySun(sol, observer.lat, observer.lon);
+    if (kind === 'sun') return out.copy(sk.dir);
+    const mp = Astro.moon(sol.jd);
+    skyConv(Astro.unit(mp.ra, mp.dec), out);
+    return out.applyAxisAngle(yAxisV, -sk.lst).applyAxisAngle(xAxis, Math.PI / 2 - observer.lat * DEG);
+  }
+  const pathMat = rgb => new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    uniforms: { uPx: { value: 0.001 }, uColor: { value: new THREE.Color(rgb) } },
+    vertexShader: `
+      attribute vec3 aDir; attribute float aSide; attribute float aT;
+      uniform float uPx; varying float vA;
+      void main(){
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vec3 t = normalize((modelViewMatrix * vec4(aDir, 0.0)).xyz);
+        vec3 s = normalize(cross(t, vec3(0.0, 0.0, 1.0)));
+        mv.xyz += s * aSide * 1.6 * uPx * max(-mv.z, 1.0);
+        vA = smoothstep(0.0, 0.07, aT) * smoothstep(1.0, 0.93, aT) * (position.y > 0.0 ? 1.0 : 0.3);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 uColor; varying float vA; void main(){ gl_FragColor = vec4(uColor, vA * 0.8); }`,
+  });
+  const skyPaths = ['sun', 'moon'].map(kind => {
+    const geo = new THREE.BufferGeometry(), mesh = new THREE.Mesh(geo, pathMat(kind === 'sun' ? 0xffd27a : 0xa9c8ff));
+    mesh.frustumCulled = false; mesh.renderOrder = 3; mesh.visible = false; scene.add(mesh);
+    const flag = kind === 'sun' ? 'pathSun' : 'pathMoon', btn = $(flag);
+    const P = { kind, geo, mesh, btn, on: loadFlag(flag, false), center: 0, key: '', marks: [], step: (kind === 'sun' ? 5 : 10) * 60000 };
+    const set = on => { P.on = on; btn.setAttribute('aria-pressed', String(on)); saveFlag(flag, on); P.key = ''; };
+    btn.setAttribute('aria-pressed', String(P.on));
+    btn.addEventListener('click', () => set(!P.on));
+    return P;
+  });
+  function buildPath(P) {
+    const step = P.step, n = Math.round(24 * HOUR / step) + 1, t0 = P.center - 12 * HOUR, v = pathTv;
+    const pos = new Float32Array(n * 3), dir = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { pathAt(P.kind, t0 + i * step, v); pos[i * 3] = v.x * PATH_R; pos[i * 3 + 1] = v.y * PATH_R; pos[i * 3 + 2] = v.z * PATH_R; }
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - 1) * 3, b = Math.min(n - 1, i + 1) * 3;
+      for (let k = 0; k < 3; k++) dir[i * 3 + k] = pos[b + k] - pos[a + k];
+    }
+    const pa = new Float32Array(n * 6), da = new Float32Array(n * 6), sa = new Float32Array(n * 2), ta = new Float32Array(n * 2), idx = [];
+    for (let i = 0; i < n; i++) for (let s = 0; s < 2; s++) {
+      const j = i * 2 + s;
+      for (let k = 0; k < 3; k++) { pa[j * 3 + k] = pos[i * 3 + k]; da[j * 3 + k] = dir[i * 3 + k]; }
+      sa[j] = s ? 1 : -1; ta[j] = i / (n - 1);
+      if (i < n - 1 && !s) idx.push(j, j + 1, j + 2, j + 1, j + 3, j + 2);
+    }
+    const g = P.geo;
+    g.setAttribute('position', new THREE.BufferAttribute(pa, 3)); g.setAttribute('aDir', new THREE.BufferAttribute(da, 3));
+    g.setAttribute('aSide', new THREE.BufferAttribute(sa, 1)); g.setAttribute('aT', new THREE.BufferAttribute(ta, 1)); g.setIndex(idx);
+    P.marks = [];                                                 // отметки по целым местным часам
+    const z = zoneH() * HOUR;
+    for (let ms = Math.ceil((t0 + z) / HOUR) * HOUR - z; ms <= P.center + 12 * HOUR; ms += HOUR) {
+      const hh = Math.round(mod((ms + z) / HOUR, 24)) % 24;
+      P.marks.push({ v: pathAt(P.kind, ms, new THREE.Vector3()).multiplyScalar(PATH_R), h: hh });
+    }
+  }
+  function updatePaths() {
+    const px = 2 * Math.tan(camera.fov * DEG / 2) / Math.max(1, innerHeight);
+    const key = observer.lat.toFixed(3) + '|' + observer.lon.toFixed(3);
+    for (const P of skyPaths) {
+      P.mesh.visible = P.on;
+      if (!P.on) continue;
+      if (P.key !== key || Math.abs(simTime - P.center) > 4 * 60000) { P.key = key; P.center = simTime; buildPath(P); }
+      P.mesh.material.uniforms.uPx.value = px;
+    }
+  }
+  const pathP = new THREE.Vector3();
+  function drawPaths() {
+    if (!skyPaths.some(P => P.on)) return;
+    const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight, c = lctx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.font = '600 11px Manrope, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'bottom';
+    for (const P of skyPaths) {
+      if (!P.on) continue;
+      const col = P.kind === 'sun' ? '255,214,130' : '176,205,255';
+      for (const m of P.marks) {
+        if (m.v.y < 0) continue;
+        pathP.copy(m.v).project(camera);
+        if (pathP.z >= 1 || Math.abs(pathP.x) > 1.05 || Math.abs(pathP.y) > 1.05) continue;
+        const x = (pathP.x + 1) / 2 * W, y = (1 - pathP.y) / 2 * H;
+        c.fillStyle = `rgba(${col},.95)`; c.beginPath(); c.arc(x, y, 3, 0, 6.2832); c.fill();
+        c.strokeStyle = 'rgba(10,16,30,.7)'; c.lineWidth = 1; c.stroke();
+        if (m.h % 2 === 0 || zoom > 3) {
+          const label = m.h + ':00';
+          c.lineWidth = 3; c.strokeStyle = 'rgba(8,12,24,.65)'; c.strokeText(label, x, y - 7);
+          c.fillStyle = `rgba(${col},1)`; c.fillText(label, x, y - 7);
+        }
+      }
+    }
+  }
+
   // ---------- «Защита от Солнца»: тёмные очки, когда Солнце приближено слишком близко ----------
   // Сила фильтра = (видимый размер диска Солнца в пикселях) × (Солнце в кадре) × (его не закрывают земля, дом или гора).
   // Затемнение включается быстро (глаз слепит сразу) и отпускает медленно, как адаптация зрения.
@@ -1564,6 +1661,7 @@
     tilt.updateMatrixWorld(true);
     const dayK = THREE.MathUtils.smoothstep(s.dir.y, -0.12, 0.25);
     const mo = updateMoon(sol, dayK);
+    updatePaths();
     if (!paused) landscape.tick(dt * speed);       // самолёт живёт в том же ускоренном времени, что Солнце и Луна
     landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0, mo);
     if (trackPlane) {
@@ -1625,6 +1723,7 @@
     updateSunShade(dt);
     updateMeasure();
     drawStarLabels(starMat.uniforms.uNight.value);
+    drawPaths();
 
     updateGlobe(sol);
     gRenderer.render(gScene, gCam);
