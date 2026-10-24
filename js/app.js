@@ -1380,6 +1380,74 @@
     }
   }
 
+
+  // ---------- сетки как в Stellarium: азимутальная (привязана к горизонту) и экваториальная (вращается со звёздами) ----------
+  // Обе описываются «долготой» и «широтой» на сфере: у азимутальной это азимут и высота, у экваториальной — прямое восхождение и склонение.
+  const GRID_R = 990;
+  function makeGrid(id, o) {
+    const on = $(id); on.checked = loadFlag(id, false);
+    const g = { on, o, lines: null, bold: null };
+    const v = (lon, lat) => o.vec(lon * DEG, lat * DEG).multiplyScalar(GRID_R);
+    const reg = [], bld = [];
+    const push = (arr, a, b) => arr.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    for (let lat = -80; lat <= 80; lat += o.latStep) {                 // параллели (круги высоты / склонения)
+      if (lat === 0 && o.noZero) continue;                            // линию прямо на горизонте не рисуем: там и так край земли
+      const arr = lat === 0 ? bld : reg;
+      for (let lon = 0; lon < 360; lon += 5) push(arr, v(lon, lat), v(lon + 5, lat));
+    }
+    for (let lon = 0; lon < 360; lon += o.lonStep) {                   // меридианы (линии азимута / часовые круги)
+      for (let lat = -90; lat < 90; lat += 5) push(reg, v(lon, lat), v(lon, lat + 5));
+    }
+    const mk = (arr, opacity) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arr), 3));
+      const m = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: o.color, transparent: true, opacity, depthWrite: false, fog: false }));
+      m.frustumCulled = false; m.renderOrder = 2; m.visible = false; o.parent.add(m);
+      return m;
+    };
+    g.lines = mk(reg, 0.26); g.bold = mk(bld, 0.7);
+    on.addEventListener('change', () => saveFlag(id, on.checked));
+    return g;
+  }
+  const grids = [
+    makeGrid('gridAz', { parent: scene, color: 0xffffff, noZero: true, lonStep: 10, latStep: 10, world: null,
+      vec: (lo, la) => new THREE.Vector3(-Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)),
+      lonOf: v => Math.atan2(-v.x, v.z), lonName: d => d + '°', latName: d => d + '°' }),
+    makeGrid('gridEq', { parent: spin, color: 0xf9bd5c, lonStep: 15, latStep: 10, world: spin,
+      vec: (lo, la) => new THREE.Vector3(-Math.cos(la) * Math.sin(lo), Math.sin(la), -Math.cos(la) * Math.cos(lo)),
+      lonOf: v => Math.atan2(-v.x, -v.z),
+      lonName: d => (d / 15) + (I18N.lang === 'ru' ? 'ч' : 'h'), latName: d => (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d) + '°' }),
+  ];
+  const grF = new THREE.Vector3(), grP = new THREE.Vector3(), grW = new THREE.Vector3(), grInv = new THREE.Matrix4();
+  function updateGrids() { for (const g of grids) g.lines.visible = g.bold.visible = g.on.checked; }
+  function drawGrids() {
+    if (!grids.some(g => g.on.checked)) return;
+    const dpr = Math.min(devicePixelRatio, 2), W = labels.clientWidth, H = labels.clientHeight, c = lctx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.font = '600 10.5px "JetBrains Mono", ui-monospace, monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.globalAlpha = 0.9;
+    camera.getWorldDirection(grF);
+    const put = (g, lon, lat, text) => {                              // подпись в точке (lon, lat) сетки, если она на экране и над горизонтом
+      grP.copy(g.o.vec(lon * DEG, lat * DEG)).multiplyScalar(GRID_R);
+      grW.copy(grP); if (g.o.world) grW.applyMatrix4(g.o.world.matrixWorld);
+      if (grW.y < 5) return;
+      grW.project(camera);
+      if (grW.z >= 1 || Math.abs(grW.x) > 0.96 || Math.abs(grW.y) > 0.94) return;
+      const x = (grW.x + 1) / 2 * W, y = (1 - grW.y) / 2 * H, col = '#' + g.o.color.toString(16).padStart(6, '0');
+      c.lineWidth = 3; c.strokeStyle = 'rgba(8,12,24,.7)'; c.strokeText(text, x, y);
+      c.fillStyle = col; c.fillText(text, x, y);
+    };
+    for (const g of grids) {
+      if (!g.on.checked) continue;
+      const o = g.o;
+      grP.copy(grF); if (o.world) grP.transformDirection(grInv.copy(o.world.matrixWorld).invert());
+      const lon0 = Math.round((((o.lonOf(grP) / DEG) % 360) + 360) % 360 / o.lonStep) * o.lonStep;           // ближайший к центру взгляда меридиан
+      const lat0 = Math.max(-80, Math.min(80, Math.round(Math.asin(Math.max(-1, Math.min(1, grP.y))) / DEG / 10) * 10));   // и параллель
+      for (let lat = -80; lat <= 80; lat += 10) if (lat !== lat0 && !(lat === 0 && o.noZero)) put(g, lon0, lat, o.latName(lat));          // подписи параллелей — на меридиане у центра
+      for (let lon = 0; lon < 360; lon += (o.lonStep === 10 ? 30 : o.lonStep)) put(g, lon, lat0, o.lonName(lon));   // подписи меридианов — на параллели у центра
+    }
+    c.globalAlpha = 1;
+  }
+
   // ---------- «Защита от Солнца»: тёмные очки, когда Солнце приближено слишком близко ----------
   // Сила фильтра = (видимый размер диска Солнца в пикселях) × (Солнце в кадре) × (его не закрывают земля, дом или гора).
   // Затемнение включается быстро (глаз слепит сразу) и отпускает медленно, как адаптация зрения.
@@ -1684,6 +1752,7 @@
     const dayK = THREE.MathUtils.smoothstep(s.dir.y, -0.12, 0.25);
     const mo = updateMoon(sol, dayK);
     updatePaths();
+    updateGrids();
     if (!paused) landscape.tick(dt * speed);       // самолёт живёт в том же ускоренном времени, что Солнце и Луна
     landscape.update(s.dir, now / 1000, always.checked && s.dir.y < 0, mo);
     if (trackPlane) {
@@ -1746,6 +1815,7 @@
     updateMeasure();
     drawStarLabels(starMat.uniforms.uNight.value);
     drawPaths();
+    drawGrids();
 
     updateGlobe(sol);
     gRenderer.render(gScene, gCam);

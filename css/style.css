@@ -309,16 +309,16 @@ button.obs-btn:hover { background: rgba(200,220,255,.11); border-color: rgba(200
 .icon-btn:hover .ico-spark { filter: drop-shadow(0 0 3px var(--sun)); }
 
 /* стеклянные полосы прокрутки: тонкая, закруглённая «капля» ползунка на прозрачной дорожке */
-.star-table-wrap, .obs-menu { scrollbar-width: thin; scrollbar-color: rgba(200,220,255,.3) transparent; }
-.star-table-wrap::-webkit-scrollbar, .obs-menu::-webkit-scrollbar { width: 10px; height: 10px; }
-.star-table-wrap::-webkit-scrollbar-track, .obs-menu::-webkit-scrollbar-track { background: rgba(200,220,255,.04); border-radius: 10px; }
-.star-table-wrap::-webkit-scrollbar-thumb, .obs-menu::-webkit-scrollbar-thumb {
+.star-table-wrap, .obs-menu, .settings-pop .checklist { scrollbar-width: thin; scrollbar-color: rgba(200,220,255,.3) transparent; }
+.star-table-wrap::-webkit-scrollbar, .obs-menu::-webkit-scrollbar, .settings-pop .checklist::-webkit-scrollbar { width: 10px; height: 10px; }
+.star-table-wrap::-webkit-scrollbar-track, .obs-menu::-webkit-scrollbar-track, .settings-pop .checklist::-webkit-scrollbar-track { background: rgba(200,220,255,.04); border-radius: 10px; }
+.star-table-wrap::-webkit-scrollbar-thumb, .obs-menu::-webkit-scrollbar-thumb, .settings-pop .checklist::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(220,235,255,.34), rgba(160,190,235,.2));
   border: 1px solid rgba(220,235,255,.28); border-radius: 10px; background-clip: padding-box;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
 }
-.star-table-wrap::-webkit-scrollbar-thumb:hover, .obs-menu::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(255,214,150,.55), rgba(240,170,80,.4)); border-color: rgba(255,214,150,.5); }
-.star-table-wrap::-webkit-scrollbar-corner { background: transparent; }
+.star-table-wrap::-webkit-scrollbar-thumb:hover, .obs-menu::-webkit-scrollbar-thumb:hover, .settings-pop .checklist::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(255,214,150,.55), rgba(240,170,80,.4)); border-color: rgba(255,214,150,.5); }
+.star-table-wrap::-webkit-scrollbar-corner, .settings-pop .checklist::-webkit-scrollbar-corner { background: transparent; }
 
 /* кнопка наблюдателя целиком — «нажимаемая»: курсор-рука везде, текст не выделяется */
 button.obs-btn, button.obs-btn * { cursor: pointer; user-select: none; -webkit-user-select: none; }
@@ -426,13 +426,16 @@ button#pause:not(.paused) .orb { filter: drop-shadow(0 1px 1px rgba(120,60,0,.55
 .icon-btn.gear:hover .gear-ico, .icon-btn.gear[aria-expanded="true"] .gear-ico { transform: rotate(60deg); }
 .icon-btn.gear[aria-expanded="true"] { background: rgba(255,196,107,.18); border-color: rgba(255,196,107,.6); color: #ffe1ad; }
 .settings-pop {
-  position: fixed; z-index: 45; box-sizing: border-box; padding: 14px 16px; overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; z-index: 45; box-sizing: border-box; padding: 14px 8px 14px 16px; overflow: hidden; overscroll-behavior: contain;
   background: rgba(200,220,255,.09); border: 1px solid var(--glass-line); border-radius: 16px;
   box-shadow: 0 16px 44px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.07);
   backdrop-filter: blur(20px) saturate(1.2); -webkit-backdrop-filter: blur(20px) saturate(1.2);
   animation: pop-in .16s ease-out;
 }
+.settings-pop:not([hidden]) { display: flex; flex-direction: column; }
 .settings-pop[hidden] { display: none; }
+/* прокручивается внутренний список, а не само окно: полоса остаётся внутри скруглённых углов и не обрезается */
+.settings-pop .checklist { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 8px; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .settings-pop { animation: none; } .gear-ico { transition: none; } }
 
@@ -459,6 +462,7 @@ button#pause:not(.paused) .orb { filter: drop-shadow(0 1px 1px rgba(120,60,0,.55
 .check[data-tip] { cursor: pointer; }
 
 /* ---------- настройки: одна колонка + переключатель камеры из трёх положений ---------- */
+/* (колонка настроек: см. ниже) */
 .settings-pop .checklist { display: flex; flex-direction: column; gap: 4px; }
 .set-group { display: flex; flex-direction: column; gap: 7px; }
 .set-title { font: 700 11px var(--f-ui); text-transform: uppercase; letter-spacing: .09em; color: var(--ink-dim); }
@@ -692,3 +696,6 @@ input.zoomrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50
 }
 .path-info:hover { background: rgba(90,130,210,.75); box-shadow: 0 0 14px rgba(170,205,255,.8); }
 .path-info[hidden] { display: none; }
+
+.settings-pop .checklist::-webkit-scrollbar { width: 8px; }
+.settings-pop .checklist::-webkit-scrollbar-track, .settings-pop .checklist::-webkit-scrollbar-thumb { border-radius: 4px; }
